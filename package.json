@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "description": "Model Context Protocol server for the LingoChunk public API: your FSRS-graded vocabulary, native-audio transcripts and clips, and library, as tools for a coding agent.",
   "license": "MIT",
+  "private": false,
   "type": "module",
   "bin": {
     "lingochunk-mcp": "dist/index.js"
@@ -16,7 +17,9 @@
   "scripts": {
     "build": "tsc",
     "typecheck": "tsc --noEmit",
+    "test": "vitest run",
     "start": "node dist/index.js",
+    "smoke": "node --experimental-strip-types scripts/smoke.ts",
     "prepare": "npm run build"
   },
   "dependencies": {
@@ -25,6 +28,7 @@
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
-    "typescript": "^5.6.0"
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0"
   }
 }
