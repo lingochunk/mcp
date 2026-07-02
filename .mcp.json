@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "lingochunk": {
+      "command": "node",
+      "args": ["${CLAUDE_PLUGIN_ROOT}/dist/index.js"],
+      "env": {
+        "LINGOCHUNK_TOKEN": "${LINGOCHUNK_TOKEN}"
+      }
+    }
+  }
+}

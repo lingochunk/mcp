@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- REPLACE: lesson title -->
+    <title>LingoChunk lesson</title>
+    <style>
+      :root {
+        --bg: #faf7f0;
+        --card: #ffffff;
+        --ink: #23201b;
+        --muted: #6b6459;
+        --line: #e7e0d3;
+        --amber: #c8892b;
+        --iris: #5b5bd6;
+        --green: #3f9d5a;
+        --red: #c8452b;
+        --radius: 12px;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--ink);
+        font: 16px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      }
+      main { max-width: 760px; margin: 0 auto; padding: 32px 20px 80px; }
+      header h1 { font-size: 1.7rem; margin: 0 0 4px; }
+      header p { color: var(--muted); margin: 0 0 24px; }
+      section {
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        padding: 20px 22px;
+        margin: 0 0 20px;
+      }
+      section > h2 {
+        font-size: 1.1rem;
+        margin: 0 0 12px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .tag {
+        font-size: 0.72rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--amber);
+      }
+      .sentence { margin: 10px 0; }
+      .sentence .translation { color: var(--muted); font-size: 0.95rem; }
+      audio { width: 100%; margin: 8px 0; }
+
+      /* Gap-fill */
+      .gap {
+        display: inline-block;
+        min-width: 90px;
+        border: 0;
+        border-bottom: 2px solid var(--amber);
+        background: transparent;
+        font: inherit;
+        color: var(--ink);
+        text-align: center;
+        padding: 0 4px;
+      }
+      .gap.correct { border-color: var(--green); color: var(--green); }
+      .gap.wrong { border-color: var(--red); color: var(--red); }
+
+      /* Multiple choice */
+      .mcq { display: grid; gap: 8px; margin-top: 8px; }
+      .opt {
+        text-align: left;
+        padding: 10px 12px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: #fff;
+        font: inherit;
+        color: var(--ink);
+        cursor: pointer;
+      }
+      .opt:hover { border-color: var(--iris); }
+      .opt.correct { border-color: var(--green); background: #eef8f0; }
+      .opt.wrong { border-color: var(--red); background: #fbeeea; }
+
+      /* Blur-reveal */
+      .reveal {
+        filter: blur(5px);
+        cursor: pointer;
+        transition: filter 0.15s ease;
+        border-radius: 4px;
+      }
+      .reveal.shown { filter: none; }
+
+      .actions { margin-top: 14px; }
+      button.check {
+        padding: 8px 16px;
+        border: 0;
+        border-radius: 8px;
+        background: var(--iris);
+        color: #fff;
+        font: inherit;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      .feedback { margin-left: 12px; font-weight: 600; }
+      .feedback.ok { color: var(--green); }
+      .feedback.no { color: var(--red); }
+
+      /* Glossary */
+      table.glossary { width: 100%; border-collapse: collapse; }
+      table.glossary th, table.glossary td {
+        text-align: left;
+        padding: 8px 10px;
+        border-bottom: 1px solid var(--line);
+        vertical-align: top;
+      }
+      table.glossary th { color: var(--muted); font-weight: 600; font-size: 0.85rem; }
+      .cefr {
+        font-size: 0.72rem;
+        font-weight: 700;
+        color: var(--iris);
+        border: 1px solid var(--iris);
+        border-radius: 5px;
+        padding: 1px 5px;
+      }
+      footer {
+        color: var(--muted);
+        font-size: 0.85rem;
+        text-align: center;
+        border-top: 1px solid var(--line);
+        padding-top: 20px;
+      }
+      footer a { color: var(--amber); }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <!-- REPLACE: lesson title + one-line summary -->
+        <h1>Lesson title</h1>
+        <p>What this lesson covers, and which words it drills.</p>
+      </header>
+
+      <!-- REPLACE: one <section> per exercise. Keep the data-attributes; the
+           runtime at the bottom wires them up. Delete the example content and
+           replace it with material from the LingoChunk tools. -->
+
+      <!-- EXAMPLE: gap-fill -->
+      <section>
+        <h2><span class="tag">Gap-fill</span> Complete the sentence</h2>
+        <div class="sentence">
+          Das <input class="gap" data-answer="Haus" aria-label="blank" /> ist gross.
+          <div class="translation">The ___ is big.</div>
+        </div>
+        <div class="actions">
+          <button class="check">Check</button>
+          <span class="feedback"></span>
+        </div>
+      </section>
+
+      <!-- EXAMPLE: listening comprehension (inline the clip as a data URI) -->
+      <section>
+        <h2><span class="tag">Listening</span> What do you hear?</h2>
+        <!-- REPLACE the src with data:audio/mp4;base64,<clip bytes> -->
+        <audio controls src="data:audio/mp4;base64,"></audio>
+        <div class="mcq" data-correct="0">
+          <button class="opt">Das Haus ist gross.</button>
+          <button class="opt">Das Auto ist klein.</button>
+          <button class="opt">Der Baum ist alt.</button>
+        </div>
+      </section>
+
+      <!-- EXAMPLE: blur-reveal (translation hidden until clicked) -->
+      <section>
+        <h2><span class="tag">Recall</span> Translate, then reveal</h2>
+        <div class="sentence">
+          Wir gehen nach Hause.
+          <div class="translation">
+            <span class="reveal">We are going home.</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- EXAMPLE: glossary (exclude words the learner already knows) -->
+      <section>
+        <h2><span class="tag">Glossary</span> New and learning words</h2>
+        <table class="glossary">
+          <thead>
+            <tr><th>Word</th><th>Meaning</th><th>Level</th><th>Audio</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>das Haus</td>
+              <td>the house</td>
+              <td><span class="cefr">A1</span></td>
+              <td><audio controls src="data:audio/mp4;base64,"></audio></td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <footer>
+        <!-- REPLACE: source episode title + attribution -->
+        Built from your LingoChunk listening history.
+        <a href="https://lingochunk.com">lingochunk.com</a>
+      </footer>
+    </main>
+
+    <script>
+      // Dependency-free exercise runtime. Content above is data-attribute
+      // driven; do not rewrite this - just add exercise sections.
+      (function () {
+        // Gap-fill: a "Check" button validates every .gap in its section.
+        document.querySelectorAll("button.check").forEach(function (btn) {
+          btn.addEventListener("click", function () {
+            var section = btn.closest("section");
+            var gaps = section.querySelectorAll(".gap");
+            var all = true;
+            gaps.forEach(function (gap) {
+              var want = (gap.dataset.answer || "").trim().toLowerCase();
+              var got = (gap.value || "").trim().toLowerCase();
+              var ok = want.length > 0 && got === want;
+              gap.classList.toggle("correct", ok);
+              gap.classList.toggle("wrong", !ok);
+              if (!ok) all = false;
+            });
+            var fb = section.querySelector(".feedback");
+            if (fb) {
+              fb.textContent = all ? "Correct" : "Try again";
+              fb.className = "feedback " + (all ? "ok" : "no");
+            }
+          });
+        });
+
+        // Multiple choice: data-correct is the 0-based index of the right option.
+        document.querySelectorAll(".mcq").forEach(function (mcq) {
+          var correct = parseInt(mcq.dataset.correct, 10);
+          var opts = mcq.querySelectorAll(".opt");
+          opts.forEach(function (opt, i) {
+            opt.addEventListener("click", function () {
+              opts.forEach(function (o) {
+                o.classList.remove("correct", "wrong");
+              });
+              opt.classList.add(i === correct ? "correct" : "wrong");
+              if (i !== correct) opts[correct].classList.add("correct");
+            });
+          });
+        });
+
+        // Blur-reveal: click to toggle.
+        document.querySelectorAll(".reveal").forEach(function (el) {
+          el.addEventListener("click", function () {
+            el.classList.toggle("shown");
+          });
+        });
+      })();
+    </script>
+  </body>
+</html>

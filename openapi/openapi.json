@@ -1,0 +1,1881 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "LingoChunk Public API",
+    "description": "The LingoChunk public API. Read your FSRS-graded vocabulary, look words up, browse your library, pull sliced transcripts and native audio, search your listening history, and cut audio clips.\n\nAuthenticate with a personal access token created in your account settings: send it as `Authorization: Bearer lcp_...`. Each endpoint requires a scope, granted to the token at creation.",
+    "version": "1.0"
+  },
+  "servers": [
+    {
+      "url": "https://lingochunk.com",
+      "description": "Production"
+    }
+  ],
+  "paths": {
+    "/api/v1/vocab": {
+      "get": {
+        "tags": [
+          "public-v1"
+        ],
+        "summary": "List Vocab",
+        "description": "List the learner's vocabulary, aggregated per word, with FSRS maturity.\n\nThe per-word state is grounded in the user's real listening content. Use\n``since`` (with the ``updated_at`` from a prior response) plus ``cursor`` for\nincremental sync.\n\nIncremental sync is ADDITIVE-ONLY: ``since`` surfaces new and changed words\nbut carries no deletion signal, so a word the user later removes will not\nappear as \"deleted\". Clients that must stay exactly in step should do a\nperiodic full resync (call without ``since``) and treat that as authoritative.\n\n**Requires scope:** `vocab:read`",
+        "operationId": "list_vocab_api_v1_vocab_get",
+        "parameters": [
+          {
+            "name": "language",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter to one learning language (ISO 639-1)",
+              "title": "Language"
+            },
+            "description": "Filter to one learning language (ISO 639-1)"
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "known",
+                    "learning",
+                    "new",
+                    "due"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by learning status derived from FSRS state",
+              "title": "Status"
+            },
+            "description": "Filter by learning status derived from FSRS state"
+          },
+          {
+            "name": "cefr",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by CEFR level (A1-C2)",
+              "title": "Cefr"
+            },
+            "description": "Filter by CEFR level (A1-C2)"
+          },
+          {
+            "name": "since",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Return only words changed at/after this ISO 8601 time (incremental sync)",
+              "title": "Since"
+            },
+            "description": "Return only words changed at/after this ISO 8601 time (incremental sync)"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "description": "Max items per page",
+              "default": 50,
+              "title": "Limit"
+            },
+            "description": "Max items per page"
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Opaque cursor from a previous page's next_cursor",
+              "title": "Cursor"
+            },
+            "description": "Opaque cursor from a previous page's next_cursor"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VocabularyListV1"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request parameters",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorV1"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid API token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorV1"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The token lacks the scope this endpoint requires",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorV1"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded. The `Retry-After` response header gives the number of seconds to wait.",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds to wait before retrying",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorV1"
+                }
+              }
+            }
+          }
+        },
+        "x-required-scopes": [
+          "vocab:read"
+        ]
+      }
+    },
+    "/api/v1/vocab/lookup": {
+      "get": {
+        "tags": [
+          "public-v1"
+        ],
+        "summary": "Lookup Word",
+        "description": "Look up one word: the learner's own context first, then the shared\nenrichment lexicon as a gender/CEFR fallback. 404 only when neither knows it.\n\n**Requires scope:** `vocab:read`",
+        "operationId": "lookup_word_api_v1_vocab_lookup_get",
+        "parameters": [
+          {
+            "name": "lemma",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Dictionary form to look up",
+              "title": "Lemma"
+            },
+            "description": "Dictionary form to look up"
+          },
+          {
+            "name": "language",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Language of the word (ISO 639-1)",
+              "title": "Language"
+            },
+            "description": "Language of the word (ISO 639-1)"
+          },
+          {
+            "name": "pos",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Part of speech, if known",
+              "title": "Pos"
+            },
+            "description": "Part of speech, if known"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VocabularyLookupV1"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found or not accessible",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorV1"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid API token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorV1"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The token lacks the scope this endpoint requires",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorV1"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded. The `Retry-After` response header gives the number of seconds to wait.",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds to wait before retrying",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorV1"
+                }
+              }
+            }
+          }
+        },
+        "x-required-scopes": [
+          "vocab:read"
+        ]
+      }
+    },
+    "/api/v1/library": {
+      "get": {
+        "tags": [
+          "public-v1"
+        ],
+        "summary": "List Library",
+        "description": "List READY submissions in the learner's library (own + followed\ncollections), newest first.\n\nKeyset-paginated on (created_at, id) via ``cursor`` (same convention as\n``/vocab``). The keyset is applied in Python over the ordered rows, matching\nthe vocab endpoint and sidestepping SQLite datetime-comparison quirks; the\nper-user library is bounded, so this stays cheap.\n\n**Requires scope:** `content:read`",
+        "operationId": "list_library_api_v1_library_get",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "description": "Max items per page",
+              "default": 50,
+              "title": "Limit"
+            },
+            "description": "Max items per page"
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Opaque cursor from a previous page's next_cursor",
+              "title": "Cursor"
+            },
+            "description": "Opaque cursor from a previous page's next_cursor"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LibraryListV1"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request parameters",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorV1"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid API token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorV1"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The token lacks the scope this endpoint requires",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorV1"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded. The `Retry-After` response header gives the number of seconds to wait.",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds to wait before retrying",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorV1"
+                }
+              }
+            }
+          }
+        },
+        "x-required-scopes": [
+          "content:read"
+        ]
+      }
+    },
+    "/api/v1/submissions/{submission_id}/transcript": {
+      "get": {
+        "tags": [
+          "public-v1"
+        ],
+        "summary": "Get Transcript Slice",
+        "description": "Return a submission's transcript, optionally sliced by sentence-position\nrange and/or time range.\n\nAccess mirrors the internal app: 404 for anything the caller cannot read.\nThe ``transcript_state`` field distinguishes a genuinely empty slice from a\nsubmission that is still processing (``processing``) or ready but with no\ntranscript on file (``unavailable``), so a not-ready submission never looks\nlike an empty transcript.\n\n**Requires scope:** `content:read`",
+        "operationId": "get_transcript_slice_api_v1_submissions__submission_id__transcript_get",
+        "parameters": [
+          {
+            "name": "submission_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Submission Id"
+            }
+          },
+          {
+            "name": "from_sentence",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "First sentence position to include (inclusive)",
+              "title": "From Sentence"
+            },
+            "description": "First sentence position to include (inclusive)"
+          },
+          {
+            "name": "to_sentence",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Last sentence position to include (inclusive)",
+              "title": "To Sentence"
+            },
+            "description": "Last sentence position to include (inclusive)"
+          },
+          {
+            "name": "from_time",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Include sentences overlapping at/after this (s)",
+              "title": "From Time"
+            },
+            "description": "Include sentences overlapping at/after this (s)"
+          },
+          {
+            "name": "to_time",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Include sentences overlapping at/before this (s)",
+              "title": "To Time"
+            },
+            "description": "Include sentences overlapping at/before this (s)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TranscriptSliceV1"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request parameters",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorV1"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found or not accessible",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorV1"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid API token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorV1"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The token lacks the scope this endpoint requires",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorV1"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded. The `Retry-After` response header gives the number of seconds to wait.",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds to wait before retrying",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorV1"
+                }
+              }
+            }
+          }
+        },
+        "x-required-scopes": [
+          "content:read"
+        ]
+      }
+    },
+    "/api/v1/submissions/{submission_id}/audio-url": {
+      "get": {
+        "tags": [
+          "public-v1"
+        ],
+        "summary": "Get Audio Url",
+        "description": "Return a short-lived presigned URL to the native audio (Range-capable).\n\n**Requires scope:** `content:read`",
+        "operationId": "get_audio_url_api_v1_submissions__submission_id__audio_url_get",
+        "parameters": [
+          {
+            "name": "submission_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Submission Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AudioUrlV1"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found or not accessible",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorV1"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid API token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorV1"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The token lacks the scope this endpoint requires",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorV1"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded. The `Retry-After` response header gives the number of seconds to wait.",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds to wait before retrying",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorV1"
+                }
+              }
+            }
+          }
+        },
+        "x-required-scopes": [
+          "content:read"
+        ]
+      }
+    },
+    "/api/v1/sentences/search": {
+      "get": {
+        "tags": [
+          "public-v1"
+        ],
+        "summary": "Search Sentences",
+        "description": "Search the caller's readable library for sentences.\n\n``lemma`` returns the curated example sentences linked to that word - a\nsubset of every occurrence, but the good, hand-picked ones. The lemma is\nmatched case-insensitively against ``lower(lemma)`` (backed by\n``ix_vocabulary_items_lemma_lower``) and joined to its sentences through the\nindexed vocabulary_examples foreign keys. ``q`` does a case-insensitive\nsubstring match on sentence text (a scan, so it is limit-capped). At least\none of the two is required.\n\nResults are a capped SAMPLE, not an exhaustive set: there is no pagination\nand no completeness guarantee. Raise ``limit`` (up to 100) for more, or use\na more specific query.\n\n**Requires scope:** `content:read`",
+        "operationId": "search_sentences_api_v1_sentences_search_get",
+        "parameters": [
+          {
+            "name": "lemma",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Find example sentences for this dictionary form",
+              "title": "Lemma"
+            },
+            "description": "Find example sentences for this dictionary form"
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Case-insensitive substring match on sentence text",
+              "title": "Q"
+            },
+            "description": "Case-insensitive substring match on sentence text"
+          },
+          {
+            "name": "language",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Restrict to one learning language (ISO 639-1)",
+              "title": "Language"
+            },
+            "description": "Restrict to one learning language (ISO 639-1)"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "description": "Max hits returned (a capped sample, not exhaustive)",
+              "default": 20,
+              "title": "Limit"
+            },
+            "description": "Max hits returned (a capped sample, not exhaustive)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SentenceSearchV1"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request parameters",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorV1"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid API token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorV1"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The token lacks the scope this endpoint requires",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorV1"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded. The `Retry-After` response header gives the number of seconds to wait.",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds to wait before retrying",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorV1"
+                }
+              }
+            }
+          }
+        },
+        "x-required-scopes": [
+          "content:read"
+        ]
+      }
+    },
+    "/api/v1/submissions/{submission_id}/clip": {
+      "get": {
+        "tags": [
+          "public-v1"
+        ],
+        "summary": "Get Audio Clip",
+        "description": "Return a native-audio snippet of [start, end] as an audio file.\n\nThe cut is cached in object storage under\n``clips/{submission_id}/{start_ms}-{end_ms}.{ext}`` and served from cache on\nrepeat. Rate limited per token (30/hour) AND per user (60/hour). Returns 503\nwhen the server has no ffmpeg binary and the clip is not already cached. The\nresponse media type follows the source audio (audio/mp4, audio/mpeg,\naudio/webm, audio/wav or audio/ogg).\n\n**Requires scope:** `content:read`",
+        "operationId": "get_audio_clip_api_v1_submissions__submission_id__clip_get",
+        "parameters": [
+          {
+            "name": "submission_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Submission Id"
+            }
+          },
+          {
+            "name": "start",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "number",
+              "minimum": 0,
+              "description": "Clip start in seconds",
+              "title": "Start"
+            },
+            "description": "Clip start in seconds"
+          },
+          {
+            "name": "end",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "description": "Clip end in seconds",
+              "title": "End"
+            },
+            "description": "Clip end in seconds"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The audio clip",
+            "content": {
+              "audio/mp4": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "audio/mpeg": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "audio/webm": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "audio/wav": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "audio/ogg": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request parameters",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorV1"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found or not accessible",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorV1"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Audio clipping is unavailable on this server",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorV1"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid API token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorV1"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The token lacks the scope this endpoint requires",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorV1"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded. The `Retry-After` response header gives the number of seconds to wait.",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds to wait before retrying",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorV1"
+                }
+              }
+            }
+          }
+        },
+        "x-required-scopes": [
+          "content:read"
+        ]
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AudioUrlV1": {
+        "properties": {
+          "url": {
+            "type": "string",
+            "title": "Url",
+            "description": "Presigned URL for the full audio file"
+          },
+          "expires_in": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expires In",
+            "description": "Seconds until the URL expires"
+          }
+        },
+        "type": "object",
+        "required": [
+          "url"
+        ],
+        "title": "AudioUrlV1",
+        "description": "A short-lived direct URL to the native audio (supports HTTP Range)."
+      },
+      "CollectionRefV1": {
+        "properties": {
+          "slug": {
+            "type": "string",
+            "title": "Slug",
+            "description": "URL-safe collection identifier"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "description": "Human-readable collection name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "slug",
+          "name"
+        ],
+        "title": "CollectionRefV1",
+        "description": "The collection a piece of content belongs to."
+      },
+      "ErrorV1": {
+        "properties": {
+          "detail": {
+            "type": "string",
+            "title": "Detail",
+            "description": "Human-readable error message"
+          }
+        },
+        "type": "object",
+        "required": [
+          "detail"
+        ],
+        "title": "ErrorV1",
+        "description": "The uniform error body for every /api/v1 failure."
+      },
+      "FsrsSummaryV1": {
+        "properties": {
+          "state": {
+            "type": "string",
+            "enum": [
+              "new",
+              "learning",
+              "review",
+              "relearning"
+            ],
+            "title": "State",
+            "description": "Most advanced state across the word's cards: new | learning | review | relearning"
+          },
+          "stability": {
+            "type": "number",
+            "title": "Stability",
+            "description": "Highest FSRS stability (days) across cards"
+          },
+          "difficulty": {
+            "type": "number",
+            "title": "Difficulty",
+            "description": "FSRS difficulty of the most advanced card (0-10 scale)"
+          },
+          "due": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due",
+            "description": "Earliest next-review time across the word's non-new cards; null when every card is still new (a new card has no scheduled due)"
+          },
+          "reps": {
+            "type": "integer",
+            "title": "Reps",
+            "description": "Total reviews across the cards (all ratings)"
+          },
+          "lapses": {
+            "type": "integer",
+            "title": "Lapses",
+            "description": "Total lapses (Again ratings) across the cards"
+          },
+          "last_review": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Review",
+            "description": "Most recent review time, or null if never reviewed"
+          }
+        },
+        "type": "object",
+        "required": [
+          "state",
+          "stability",
+          "difficulty",
+          "reps",
+          "lapses"
+        ],
+        "title": "FsrsSummaryV1",
+        "description": "A learner's spaced-repetition state for one word, aggregated across all\nthe cards they hold for it (a word can have several card variants)."
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "LibraryItemV1": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id",
+            "description": "Submission identifier"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title",
+            "description": "Episode/lesson title"
+          },
+          "learning_language": {
+            "type": "string",
+            "title": "Learning Language",
+            "description": "Language being learned (ISO 639-1)"
+          },
+          "translation_language": {
+            "type": "string",
+            "title": "Translation Language",
+            "description": "Translation language (ISO 639-1)"
+          },
+          "duration_seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration Seconds",
+            "description": "Audio duration in seconds"
+          },
+          "sentence_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sentence Count",
+            "description": "Number of sentences in the transcript"
+          },
+          "word_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Word Count",
+            "description": "Number of words in the transcript"
+          },
+          "level": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Level",
+            "description": "CEFR level (A1-C2)"
+          },
+          "collection": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CollectionRefV1"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Owning collection, when the item is published"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At",
+            "description": "When the submission was created"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "learning_language",
+          "translation_language",
+          "created_at"
+        ],
+        "title": "LibraryItemV1",
+        "description": "A ready-to-study submission in the learner's library."
+      },
+      "LibraryListV1": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/LibraryItemV1"
+            },
+            "type": "array",
+            "title": "Items",
+            "description": "Library items, newest first"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor",
+            "description": "Pass as 'cursor' to fetch the next page; null when no more"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "LibraryListV1",
+        "description": "A page of library items with an opaque continuation cursor."
+      },
+      "SentenceSearchHitV1": {
+        "properties": {
+          "submission": {
+            "$ref": "#/components/schemas/SubmissionRefV1",
+            "description": "Where the sentence is from"
+          },
+          "position": {
+            "type": "integer",
+            "title": "Position",
+            "description": "1-based ordering within the transcript"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text",
+            "description": "Sentence text"
+          },
+          "translation": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Translation",
+            "description": "Translation, if any"
+          },
+          "start": {
+            "type": "number",
+            "title": "Start",
+            "description": "Start time in seconds"
+          },
+          "end": {
+            "type": "number",
+            "title": "End",
+            "description": "End time in seconds"
+          },
+          "lang": {
+            "type": "string",
+            "title": "Lang",
+            "description": "Language code of the sentence"
+          }
+        },
+        "type": "object",
+        "required": [
+          "submission",
+          "position",
+          "text",
+          "start",
+          "end",
+          "lang"
+        ],
+        "title": "SentenceSearchHitV1",
+        "description": "A sentence matching a search, with its source and timestamps."
+      },
+      "SentenceSearchV1": {
+        "properties": {
+          "hits": {
+            "items": {
+              "$ref": "#/components/schemas/SentenceSearchHitV1"
+            },
+            "type": "array",
+            "title": "Hits",
+            "description": "Matching sentences"
+          }
+        },
+        "type": "object",
+        "required": [
+          "hits"
+        ],
+        "title": "SentenceSearchV1",
+        "description": "Search results across the learner's readable library.\n\nResults are a capped sample (see the ``limit`` parameter), not an\nexhaustive set: there is no pagination and no completeness guarantee."
+      },
+      "SubmissionRefV1": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id",
+            "description": "Submission identifier"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title",
+            "description": "Episode/lesson title"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "SubmissionRefV1",
+        "description": "The submission a search hit came from."
+      },
+      "TranscriptSentenceV1": {
+        "properties": {
+          "position": {
+            "type": "integer",
+            "title": "Position",
+            "description": "1-based ordering within the transcript"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text",
+            "description": "Sentence text in the target language"
+          },
+          "translation": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Translation",
+            "description": "Translation, when available"
+          },
+          "start": {
+            "type": "number",
+            "title": "Start",
+            "description": "Start time in seconds"
+          },
+          "end": {
+            "type": "number",
+            "title": "End",
+            "description": "End time in seconds"
+          },
+          "speaker": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Speaker",
+            "description": "Speaker label, if known"
+          },
+          "lang": {
+            "type": "string",
+            "title": "Lang",
+            "description": "Language code of this sentence"
+          }
+        },
+        "type": "object",
+        "required": [
+          "position",
+          "text",
+          "start",
+          "end",
+          "lang"
+        ],
+        "title": "TranscriptSentenceV1",
+        "description": "One timestamped sentence of a transcript."
+      },
+      "TranscriptSliceV1": {
+        "properties": {
+          "submission_id": {
+            "type": "string",
+            "title": "Submission Id",
+            "description": "Submission the transcript belongs to"
+          },
+          "transcript_state": {
+            "type": "string",
+            "enum": [
+              "ready",
+              "processing",
+              "unavailable"
+            ],
+            "title": "Transcript State",
+            "description": "ready = sentences returned; processing = still being transcribed (sentences empty, retry later); unavailable = no transcript will be served - either the submission FAILED (terminal, do not retry) or it is ready with no transcript data on file. Distinguishes a genuinely empty slice from 'not done yet'."
+          },
+          "total_sentences": {
+            "type": "integer",
+            "title": "Total Sentences",
+            "description": "Total sentences in the full transcript (before slicing)"
+          },
+          "sentences": {
+            "items": {
+              "$ref": "#/components/schemas/TranscriptSentenceV1"
+            },
+            "type": "array",
+            "title": "Sentences",
+            "description": "Sentences within the requested slice, in order"
+          }
+        },
+        "type": "object",
+        "required": [
+          "submission_id",
+          "transcript_state",
+          "total_sentences",
+          "sentences"
+        ],
+        "title": "TranscriptSliceV1",
+        "description": "A (possibly sliced) transcript: the sentences plus enough context to page."
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      },
+      "VocabularyEntryV1": {
+        "properties": {
+          "lemma": {
+            "type": "string",
+            "title": "Lemma",
+            "description": "Dictionary (base) form of the word"
+          },
+          "pos": {
+            "type": "string",
+            "title": "Pos",
+            "description": "Part of speech, e.g. NOUN, VERB, ADJ; an empty string when the source card has no part of speech recorded"
+          },
+          "language": {
+            "type": "string",
+            "title": "Language",
+            "description": "Language being learned (ISO 639-1)"
+          },
+          "translation": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Translation",
+            "description": "Meaning in the learner's translation language"
+          },
+          "gender": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gender",
+            "description": "Grammatical gender marker (der/die/das, un/une, ...)"
+          },
+          "cefr": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cefr",
+            "description": "Estimated CEFR level (A1-C2)"
+          },
+          "ipa": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ipa",
+            "description": "IPA pronunciation, if known"
+          },
+          "reading": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reading",
+            "description": "Phonetic reading (pinyin/furigana). Always null in v1; reserved for a future non-breaking fill."
+          },
+          "fsrs": {
+            "$ref": "#/components/schemas/FsrsSummaryV1",
+            "description": "Aggregated spaced-repetition state"
+          },
+          "card_count": {
+            "type": "integer",
+            "title": "Card Count",
+            "description": "How many cards the user holds for this word"
+          },
+          "source_submission_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Submission Id",
+            "description": "A submission this word was learned from (the most advanced card)"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At",
+            "description": "When any of the word's cards last changed; use as the 'since' value for the next incremental sync"
+          }
+        },
+        "type": "object",
+        "required": [
+          "lemma",
+          "pos",
+          "language",
+          "fsrs",
+          "card_count",
+          "updated_at"
+        ],
+        "title": "VocabularyEntryV1",
+        "description": "One word in the learner's vocabulary, grounded in real listening content.\n\nAggregated per (lemma, part-of-speech, language): the FSRS block summarises\nevery card the user holds for the word, while the dictionary fields come\nfrom the enrichment of the source submission."
+      },
+      "VocabularyListV1": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/VocabularyEntryV1"
+            },
+            "type": "array",
+            "title": "Items",
+            "description": "Vocabulary entries"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor",
+            "description": "Pass as 'cursor' to fetch the next page; null when no more"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "VocabularyListV1",
+        "description": "A page of vocabulary entries with an opaque continuation cursor."
+      },
+      "VocabularyLookupV1": {
+        "properties": {
+          "lemma": {
+            "type": "string",
+            "title": "Lemma",
+            "description": "Dictionary (base) form looked up"
+          },
+          "language": {
+            "type": "string",
+            "title": "Language",
+            "description": "Language of the word (ISO 639-1)"
+          },
+          "pos": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pos",
+            "description": "Part of speech of the representative match (most advanced FSRS state, then card count, then alphabetical)"
+          },
+          "pos_variants": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Pos Variants",
+            "description": "Other parts of speech this lemma also appears under in the user's cards (the representative `pos` excluded), so nothing is hidden"
+          },
+          "translation": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Translation",
+            "description": "Meaning, from the learner's own content if present"
+          },
+          "gender": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gender",
+            "description": "Grammatical gender marker"
+          },
+          "cefr": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cefr",
+            "description": "Estimated CEFR level (A1-C2)"
+          },
+          "ipa": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ipa",
+            "description": "IPA pronunciation, if known"
+          },
+          "reading": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reading",
+            "description": "Phonetic reading (pinyin/furigana). Always null in v1; reserved for a future non-breaking fill."
+          },
+          "fsrs": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FsrsSummaryV1"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Spaced-repetition state, present only when the user has cards for this word"
+          },
+          "card_count": {
+            "type": "integer",
+            "title": "Card Count",
+            "description": "How many cards the user holds for this word",
+            "default": 0
+          },
+          "source_submission_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Submission Id",
+            "description": "A submission the word was learned from, if any"
+          },
+          "lexicon_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lexicon Source",
+            "description": "Source of the fallback gender/CEFR when the shared lexicon supplied them (e.g. 'llm', 'wiktionary')"
+          },
+          "lexicon_confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lexicon Confidence",
+            "description": "Confidence of the shared-lexicon fallback, if used"
+          }
+        },
+        "type": "object",
+        "required": [
+          "lemma",
+          "language"
+        ],
+        "title": "VocabularyLookupV1",
+        "description": "A single-word lookup: the learner's own context if present, backed by the\nshared enrichment lexicon as a fallback for gender/CEFR."
+      }
+    },
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "lcp",
+        "description": "Personal access token (prefix `lcp_`) created in account settings. Send as `Authorization: Bearer lcp_...`."
+      }
+    }
+  },
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ]
+}

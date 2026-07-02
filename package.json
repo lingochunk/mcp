@@ -1,0 +1,30 @@
+{
+  "name": "@lingochunk/mcp",
+  "version": "0.1.0",
+  "description": "Model Context Protocol server for the LingoChunk public API: your FSRS-graded vocabulary, native-audio transcripts and clips, and library, as tools for a coding agent.",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "lingochunk-mcp": "dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "start": "node dist/index.js",
+    "prepare": "npm run build"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.6.0"
+  }
+}
