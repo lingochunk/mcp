@@ -60,6 +60,16 @@ function jsonResponse(body: unknown, status = 200, headers: HeadersInit = {}): R
   });
 }
 
+/** Install a fetch mock that rejects, to exercise timeout/network handling. */
+function mockFetchReject(err: unknown): void {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => {
+      throw err;
+    }),
+  );
+}
+
 async function call(name: string, args: Record<string, unknown>): Promise<CallToolResult> {
   const handler = handlers.get(name);
   if (!handler) throw new Error(`no handler for ${name}`);
@@ -234,5 +244,74 @@ describe("error mapping", () => {
     const result = await call("get_transcript", { submission_id: "nope" });
     expect(result.isError).toBe(true);
     expect(textOf(result)).toContain("Submission not found");
+  });
+
+  it("422 validation errors surface the field message, not just the status", async () => {
+    // FastAPI's automatic request validation returns a LIST detail, unlike the
+    // string detail of intentional 4xx errors; the client must flatten it.
+    mockFetch(
+      jsonResponse(
+        {
+          detail: [
+            {
+              type: "datetime_parsing",
+              loc: ["query", "since"],
+              msg: "Input should be a valid datetime",
+            },
+          ],
+        },
+        422,
+      ),
+    );
+    const result = await call("get_vocabulary", { since: "not-a-date" });
+    expect(result.isError).toBe(true);
+    const text = textOf(result);
+    expect(text).toContain("422");
+    expect(text).toContain("query.since: Input should be a valid datetime");
+    expect(text).not.toContain("Unprocessable");
+  });
+
+  it("a non-JSON 500 body falls back to the status text, not the HTML", async () => {
+    mockFetch(
+      new Response("<html><body>Bad Gateway</body></html>", {
+        status: 500,
+        statusText: "Internal Server Error",
+        headers: { "content-type": "text/html" },
+      }),
+    );
+    const result = await call("list_library", {});
+    expect(result.isError).toBe(true);
+    const text = textOf(result);
+    expect(text).toContain("500");
+    expect(text).toContain("Internal Server Error");
+    expect(text).not.toContain("<html>");
+  });
+
+  it("a request timeout maps to a clear 'timed out' message", async () => {
+    const timeout = Object.assign(new Error("The operation was aborted"), {
+      name: "TimeoutError",
+    });
+    mockFetchReject(timeout);
+    const result = await call("get_vocabulary", {});
+    expect(result.isError).toBe(true);
+    expect(textOf(result)).toContain("timed out");
+  });
+
+  it("a network failure appends the underlying cause", async () => {
+    const netErr = Object.assign(new TypeError("fetch failed"), {
+      cause: new Error("getaddrinfo ENOTFOUND api.test"),
+    });
+    mockFetchReject(netErr);
+    const result = await call("list_library", {});
+    expect(result.isError).toBe(true);
+    const text = textOf(result);
+    expect(text).toContain("fetch failed");
+    expect(text).toContain("ENOTFOUND");
+  });
+
+  it("never leaks the token into an error message", async () => {
+    mockFetch(jsonResponse({ detail: "Invalid or missing API token" }, 401));
+    const result = await call("get_vocabulary", {});
+    expect(textOf(result)).not.toContain("lcp_test");
   });
 });

@@ -11,6 +11,24 @@ function jsonResult(value: unknown): CallToolResult {
   return { content: [{ type: "text", text: JSON.stringify(value, null, 2) }] };
 }
 
+/** AbortSignal.timeout rejects with a DOMException named "TimeoutError" (a
+ *  manual abort is "AbortError"); both mean the request gave up waiting. */
+function isTimeoutError(err: unknown): boolean {
+  return (
+    err instanceof Error &&
+    (err.name === "TimeoutError" || err.name === "AbortError")
+  );
+}
+
+/** Node's fetch reports a network failure as "fetch failed" with the real
+ *  reason on `.cause` (e.g. getaddrinfo ENOTFOUND). Surface that reason. */
+function causeMessage(err: Error): string | undefined {
+  const cause = (err as { cause?: unknown }).cause;
+  if (cause instanceof Error && cause.message) return cause.message;
+  if (typeof cause === "string" && cause) return cause;
+  return undefined;
+}
+
 /** Turn an error into a tool error result the agent can read and act on. */
 function errorResult(err: unknown): CallToolResult {
   let text: string;
@@ -25,8 +43,14 @@ function errorResult(err: unknown): CallToolResult {
     } else if (err.status === 429 && err.retryAfter !== undefined) {
       text += `\nRate limited; retry after ${err.retryAfter}s.`;
     }
+  } else if (isTimeoutError(err)) {
+    text =
+      "The request to the LingoChunk API timed out after 30s. Check your " +
+      "connection (and LINGOCHUNK_BASE_URL) and try again.";
   } else if (err instanceof Error) {
     text = err.message;
+    const cause = causeMessage(err);
+    if (cause) text += `: ${cause}`;
   } else {
     text = String(err);
   }

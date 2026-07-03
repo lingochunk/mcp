@@ -21,6 +21,67 @@ export interface AudioClip {
 
 export type QueryValue = string | number | boolean | undefined | null;
 
+/** How long any single request may take before we abort it. */
+export const REQUEST_TIMEOUT_MS = 30_000;
+/** Refuse to buffer a clip larger than this (a runaway or wrong endpoint). */
+export const MAX_CLIP_BYTES = 25 * 1024 * 1024;
+/** Never read more than this much of an error body into the message. */
+const MAX_ERROR_BODY = 10_000;
+
+function truncate(value: string, max = 300): string {
+  return value.length > max ? `${value.slice(0, max)}...` : value;
+}
+
+function safeStringify(value: unknown): string {
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
+}
+
+/** Coerce a FastAPI error `detail` into a single readable line.
+ *
+ *  Intentional errors (400/403/404/429) carry a string detail. Automatic
+ *  request-validation errors (422) carry a LIST of `{loc, msg, ...}` objects;
+ *  without this they would collapse to the bare status text ("Unprocessable
+ *  Entity") and lose the field message that tells the agent what to fix. A
+ *  detail of any other shape is stringified (truncated) rather than dropped.
+ *  Returns undefined when there is nothing usable, so the caller keeps the
+ *  status text. */
+export function formatDetail(detail: unknown): string | undefined {
+  if (typeof detail === "string") {
+    return detail.trim() || undefined;
+  }
+  if (Array.isArray(detail)) {
+    const parts = detail
+      .map(formatDetailItem)
+      .filter((p): p is string => p !== undefined);
+    return parts.length ? parts.join("; ") : undefined;
+  }
+  if (detail && typeof detail === "object") {
+    return truncate(safeStringify(detail));
+  }
+  return undefined;
+}
+
+function formatDetailItem(item: unknown): string | undefined {
+  if (typeof item === "string") return item;
+  if (item && typeof item === "object") {
+    const rec = item as { loc?: unknown; msg?: unknown };
+    if (typeof rec.msg === "string") {
+      const loc = Array.isArray(rec.loc)
+        ? rec.loc
+            .filter((p) => typeof p === "string" || typeof p === "number")
+            .join(".")
+        : "";
+      return loc ? `${loc}: ${rec.msg}` : rec.msg;
+    }
+    return truncate(safeStringify(item));
+  }
+  return undefined;
+}
+
 /** Thin, typed client over the public `/api/v1` surface. One instance per
  *  process, holding the configured base URL + token. */
 export class LingoChunkClient {
@@ -47,14 +108,19 @@ export class LingoChunkClient {
   }
 
   private async raiseForStatus(res: Response): Promise<never> {
-    let detail = res.statusText;
-    try {
-      const body = (await res.json()) as { detail?: unknown };
-      if (body && typeof body.detail === "string") {
-        detail = body.detail;
+    let detail = res.statusText || `HTTP ${res.status}`;
+    // Only read a JSON error body, and only a bounded slice of it: a 5xx from a
+    // proxy can be a whole HTML page, which we neither want to buffer nor dump
+    // into the tool message. Non-JSON errors fall back to the status text.
+    if ((res.headers.get("content-type") ?? "").includes("json")) {
+      try {
+        const raw = (await res.text()).slice(0, MAX_ERROR_BODY);
+        const body = JSON.parse(raw) as { detail?: unknown };
+        const formatted = formatDetail(body?.detail);
+        if (formatted) detail = formatted;
+      } catch {
+        // Malformed or truncated JSON error body; keep the status text.
       }
-    } catch {
-      // Non-JSON error body; keep the status text.
     }
     const retryHeader = res.headers.get("retry-after");
     const retryAfter = retryHeader ? Number(retryHeader) : undefined;
@@ -73,6 +139,7 @@ export class LingoChunkClient {
     const res = await fetch(this.buildUrl(path, params), {
       method: "GET",
       headers: this.authHeaders("application/json"),
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
     if (!res.ok) {
       await this.raiseForStatus(res);
@@ -125,10 +192,24 @@ export class LingoChunkClient {
         start,
         end,
       }),
-      { method: "GET", headers: this.authHeaders("audio/*") },
+      {
+        method: "GET",
+        headers: this.authHeaders("audio/*"),
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      },
     );
     if (!res.ok) {
       await this.raiseForStatus(res);
+    }
+    // Guard against buffering something huge: a short clip is a few hundred KB,
+    // so a Content-Length past the cap means a wrong/overlong request. Reject
+    // before reading the body into memory.
+    const declared = Number(res.headers.get("content-length"));
+    if (Number.isFinite(declared) && declared > MAX_CLIP_BYTES) {
+      throw new Error(
+        `Clip is too large (${Math.round(declared / (1024 * 1024))} MB); ` +
+          "request a shorter time range.",
+      );
     }
     const data = Buffer.from(await res.arrayBuffer());
     const contentType = res.headers.get("content-type") ?? "audio/mpeg";
