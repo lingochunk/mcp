@@ -30,4 +30,16 @@ describe("loadConfig", () => {
     expect(config.baseUrl).toBe("http://localhost:8000");
     expect(config.clipDir).toBe("/tmp/clips");
   });
+
+  it("fails fast when LINGOCHUNK_BASE_URL is not a valid URL", () => {
+    expect(() =>
+      loadConfig({ LINGOCHUNK_TOKEN: "lcp_x", LINGOCHUNK_BASE_URL: "not a url" }),
+    ).toThrowError(/LINGOCHUNK_BASE_URL/);
+  });
+
+  it("rejects a base URL without an http(s) scheme", () => {
+    expect(() =>
+      loadConfig({ LINGOCHUNK_TOKEN: "lcp_x", LINGOCHUNK_BASE_URL: "localhost:8000" }),
+    ).toThrowError(/http/);
+  });
 });

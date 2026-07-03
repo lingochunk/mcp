@@ -114,21 +114,39 @@ export function registerTools(
         "(state/stability/due/reps). Grounded in the user's real listening " +
         "history. Filter by language, status (known|learning|new|due), or CEFR; " +
         "use 'since' (an ISO 8601 time from a prior 'updated_at') plus 'cursor' " +
-        "for incremental sync. Sync is additive-only, so full-resync periodically.",
+        "for incremental sync. Sync is additive-only, so full-resync periodically. " +
+        "The list is cursor-paginated (limit up to 200); follow next_cursor until " +
+        "it is null to read the complete set.",
       inputSchema: {
         language: z
           .string()
+          .transform((v) => v.toLowerCase())
           .optional()
-          .describe("Filter to one learning language, ISO 639-1 (e.g. 'de')."),
+          .describe(
+            "Filter to one learning language, ISO 639-1, e.g. 'de' " +
+              "(normalised to lowercase).",
+          ),
         status: z
           .enum(["known", "learning", "new", "due"])
           .optional()
           .describe("Filter by learning status derived from FSRS state."),
-        cefr: z.string().optional().describe("Filter by CEFR level (A1-C2)."),
+        cefr: z
+          .string()
+          .transform((v) => v.toUpperCase())
+          .refine((v) => ["A1", "A2", "B1", "B2", "C1", "C2"].includes(v), {
+            message: "cefr must be one of A1, A2, B1, B2, C1, C2",
+          })
+          .optional()
+          .describe("Filter by CEFR level; one of A1-C2 (normalised to uppercase)."),
         since: z
           .string()
+          .refine((v) => !Number.isNaN(Date.parse(v)), {
+            message:
+              "since must be a date or datetime string, e.g. 2026-07-01 or " +
+              "2026-07-01T10:00:00Z",
+          })
           .optional()
-          .describe("ISO 8601 time; return only words changed at/after it."),
+          .describe("Return only words changed at/after this date or datetime."),
         limit: z.number().int().min(1).max(200).optional(),
         cursor: z
           .string()
@@ -150,7 +168,11 @@ export function registerTools(
         "about a word rather than inventing them.",
       inputSchema: {
         lemma: z.string().min(1).describe("Dictionary (base) form to look up."),
-        language: z.string().min(1).describe("Language of the word, ISO 639-1."),
+        language: z
+          .string()
+          .min(1)
+          .transform((v) => v.toLowerCase())
+          .describe("Language of the word, ISO 639-1 (normalised to lowercase)."),
         pos: z.string().optional().describe("Part of speech, if known (e.g. NOUN)."),
       },
     },
@@ -222,8 +244,9 @@ export function registerTools(
       description:
         "Search the user's readable library for sentences. 'lemma' returns the " +
         "curated example sentences for that word; 'q' does a case-insensitive " +
-        "substring match on sentence text. At least one is required. Results are " +
-        "a capped sample, not exhaustive.",
+        "substring match on sentence text. At least one is required, and 'lemma' " +
+        "takes precedence when both are given. Results are a capped sample, not " +
+        "exhaustive.",
       inputSchema: {
         lemma: z
           .string()
@@ -235,11 +258,24 @@ export function registerTools(
           .max(200)
           .optional()
           .describe("Case-insensitive substring match on sentence text."),
-        language: z.string().optional().describe("Restrict to one language."),
+        language: z
+          .string()
+          .transform((v) => v.toLowerCase())
+          .optional()
+          .describe("Restrict to one language (normalised to lowercase)."),
         limit: z.number().int().min(1).max(100).optional(),
       },
     },
-    async (args) => runJson(() => client.searchExamples(params(args))),
+    async (args) => {
+      // The API also 400s on this, but validating here names both fields and
+      // saves a round trip.
+      if (!args.lemma && !args.q) {
+        return errorResult(
+          new Error("search_examples needs at least one of 'lemma' or 'q'."),
+        );
+      }
+      return runJson(() => client.searchExamples(params(args)));
+    },
   );
 
   server.registerTool(
@@ -259,6 +295,16 @@ export function registerTools(
     },
     async ({ submission_id, start, end }) =>
       runResult(async () => {
+        // The API enforces these too; checking here gives a precise message and
+        // avoids a wasted request.
+        if (!(start < end)) {
+          throw new Error("get_audio_clip needs start < end.");
+        }
+        if (end - start > 60) {
+          throw new Error(
+            "get_audio_clip cannot exceed 60 seconds (end - start).",
+          );
+        }
         const clip = await client.getAudioClip(submission_id, start, end);
         await fs.mkdir(config.clipDir, { recursive: true });
         const filename = `clip-${sanitise(submission_id)}-${start}-${end}${extensionFor(

@@ -39,6 +39,20 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     /\/+$/,
     "",
   );
+  // Fail fast on a malformed origin rather than throwing an opaque error on the
+  // first request. A bare host like "localhost:8000" parses with a bogus scheme,
+  // so also require http(s).
+  let parsed: URL;
+  try {
+    parsed = new URL(baseUrl);
+  } catch {
+    throw new Error(`LINGOCHUNK_BASE_URL is not a valid URL: ${baseUrl}`);
+  }
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    throw new Error(
+      `LINGOCHUNK_BASE_URL must be an http(s) URL (e.g. https://lingochunk.com), got: ${baseUrl}`,
+    );
+  }
 
   const clipDir =
     env.LINGOCHUNK_CLIP_DIR?.trim() || path.join(os.tmpdir(), "lingochunk-mcp");

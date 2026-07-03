@@ -2,6 +2,7 @@ import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { LingoChunkClient } from "../src/client.js";
@@ -10,20 +11,30 @@ import { registerTools } from "../src/tools.js";
 
 type Handler = (args: Record<string, unknown>) => Promise<CallToolResult>;
 
-/** A stand-in server that just captures the registered tool handlers, so we can
- *  call them directly without the full MCP protocol machinery. */
-function fakeServer(): { server: McpServer; handlers: Map<string, Handler> } {
-  const handlers = new Map<string, Handler>();
+interface Registered {
+  handler: Handler;
+  schema: z.ZodRawShape;
+}
+
+/** A stand-in server that captures each tool's schema and handler, so `call`
+ *  can validate + transform args exactly as the real server would before the
+ *  handler runs. */
+function fakeServer(): { server: McpServer; tools: Map<string, Registered> } {
+  const tools = new Map<string, Registered>();
   const server = {
-    registerTool(name: string, _config: unknown, handler: Handler): void {
-      handlers.set(name, handler);
+    registerTool(
+      name: string,
+      config: { inputSchema: z.ZodRawShape },
+      handler: Handler,
+    ): void {
+      tools.set(name, { handler, schema: config.inputSchema });
     },
   } as unknown as McpServer;
-  return { server, handlers };
+  return { server, tools };
 }
 
 let clipDir: string;
-let handlers: Map<string, Handler>;
+let tools: Map<string, Registered>;
 let lastUrl = "";
 let lastInit: RequestInit = {};
 
@@ -32,7 +43,9 @@ beforeEach(async () => {
   const config: Config = { baseUrl: "https://api.test", token: "lcp_test", clipDir };
   const client = new LingoChunkClient(config);
   const fake = fakeServer();
-  handlers = fake.handlers;
+  tools = fake.tools;
+  lastUrl = "";
+  lastInit = {};
   registerTools(fake.server, client, config);
 });
 
@@ -71,9 +84,13 @@ function mockFetchReject(err: unknown): void {
 }
 
 async function call(name: string, args: Record<string, unknown>): Promise<CallToolResult> {
-  const handler = handlers.get(name);
-  if (!handler) throw new Error(`no handler for ${name}`);
-  return handler(args);
+  const tool = tools.get(name);
+  if (!tool) throw new Error(`no handler for ${name}`);
+  // Mirror the real server: validate + transform args through the tool's schema
+  // before the handler runs, so normalisation (lowercase language, uppercase
+  // cefr) and refinements are exercised.
+  const parsed = z.object(tool.schema).parse(args) as Record<string, unknown>;
+  return tool.handler(parsed);
 }
 
 function textOf(result: CallToolResult): string {
@@ -84,7 +101,7 @@ function textOf(result: CallToolResult): string {
 
 describe("tool registration", () => {
   it("registers all seven tools", () => {
-    expect([...handlers.keys()].sort()).toEqual(
+    expect([...tools.keys()].sort()).toEqual(
       [
         "get_audio_clip",
         "get_audio_url",
@@ -233,10 +250,10 @@ describe("error mapping", () => {
   });
 
   it("400 passes the detail through", async () => {
-    mockFetch(jsonResponse({ detail: "Provide at least one of 'lemma' or 'q'" }, 400));
-    const result = await call("search_examples", {});
+    mockFetch(jsonResponse({ detail: "Unsupported language" }, 400));
+    const result = await call("lookup_word", { lemma: "x", language: "de" });
     expect(result.isError).toBe(true);
-    expect(textOf(result)).toContain("Provide at least one of 'lemma' or 'q'");
+    expect(textOf(result)).toContain("Unsupported language");
   });
 
   it("404 passes the detail through", async () => {
@@ -263,7 +280,9 @@ describe("error mapping", () => {
         422,
       ),
     );
-    const result = await call("get_vocabulary", { since: "not-a-date" });
+    // Args are empty so the client-side since refinement does not pre-empt the
+    // mocked server 422 whose formatting is under test.
+    const result = await call("get_vocabulary", {});
     expect(result.isError).toBe(true);
     const text = textOf(result);
     expect(text).toContain("422");
@@ -313,5 +332,72 @@ describe("error mapping", () => {
     mockFetch(jsonResponse({ detail: "Invalid or missing API token" }, 401));
     const result = await call("get_vocabulary", {});
     expect(textOf(result)).not.toContain("lcp_test");
+  });
+});
+
+describe("input validation and URL building", () => {
+  it("encodes a lemma with a space and non-ASCII exactly", async () => {
+    mockFetch(jsonResponse({ hits: [] }));
+    await call("search_examples", { lemma: "über mich" });
+    expect(lastUrl).toBe(
+      "https://api.test/api/v1/sentences/search?lemma=%C3%BCber+mich",
+    );
+  });
+
+  it("omits absent optionals entirely (no trailing query string)", async () => {
+    mockFetch(jsonResponse({ items: [], next_cursor: null }));
+    await call("get_vocabulary", {});
+    expect(lastUrl).toBe("https://api.test/api/v1/vocab");
+  });
+
+  it("lowercases language and uppercases cefr before sending", async () => {
+    mockFetch(jsonResponse({ items: [], next_cursor: null }));
+    await call("get_vocabulary", { language: "DE", cefr: "b1" });
+    expect(lastUrl).toContain("language=de");
+    expect(lastUrl).toContain("cefr=B1");
+  });
+
+  it("rejects an unknown cefr value before the request", async () => {
+    const spy = vi.fn();
+    vi.stubGlobal("fetch", spy);
+    await expect(call("get_vocabulary", { cefr: "D9" })).rejects.toThrow();
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it("search_examples with neither lemma nor q errors client-side, naming both", async () => {
+    const spy = vi.fn();
+    vi.stubGlobal("fetch", spy);
+    const result = await call("search_examples", {});
+    expect(result.isError).toBe(true);
+    const text = textOf(result);
+    expect(text).toContain("lemma");
+    expect(text).toContain("q");
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it("get_audio_clip rejects start >= end client-side", async () => {
+    const spy = vi.fn();
+    vi.stubGlobal("fetch", spy);
+    const result = await call("get_audio_clip", {
+      submission_id: "abc",
+      start: 5,
+      end: 5,
+    });
+    expect(result.isError).toBe(true);
+    expect(textOf(result)).toContain("start < end");
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it("get_audio_clip rejects a span longer than 60s client-side", async () => {
+    const spy = vi.fn();
+    vi.stubGlobal("fetch", spy);
+    const result = await call("get_audio_clip", {
+      submission_id: "abc",
+      start: 0,
+      end: 61,
+    });
+    expect(result.isError).toBe(true);
+    expect(textOf(result)).toContain("60 seconds");
+    expect(spy).not.toHaveBeenCalled();
   });
 });
