@@ -100,6 +100,45 @@ function params(obj: object): Record<string, QueryValue> {
   return obj as Record<string, QueryValue>;
 }
 
+const EXPORT_POLL_INTERVAL_MS = 2_000;
+const EXPORT_POLL_BUDGET_MS = 60_000;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/** Start a deck export, then poll its status for up to ~60s and return a compact
+ *  result the agent can act on. A 400 (e.g. an External/multi-source deck with
+ *  no linked submission) or 403 bubbles up as an ApiError for errorResult. */
+async function exportAndPoll(
+  client: LingoChunkClient,
+  deckId: number,
+): Promise<CallToolResult> {
+  await client.exportDeck(deckId);
+  const deadline = Date.now() + EXPORT_POLL_BUDGET_MS;
+  for (;;) {
+    const st = await client.exportDeckStatus(deckId);
+    if (st.status === "ready") {
+      return jsonResult({ status: "ready", download_url: st.download_url });
+    }
+    if (st.status === "failed") {
+      return jsonResult({
+        status: "failed",
+        message: "Export failed; call export_anki_deck again to retry.",
+      });
+    }
+    if (Date.now() >= deadline) {
+      return jsonResult({
+        status: "pending",
+        message:
+          "Still generating; call export_anki_deck again shortly to get the " +
+          "download URL.",
+      });
+    }
+    await sleep(EXPORT_POLL_INTERVAL_MS);
+  }
+}
+
 export function registerTools(
   server: McpServer,
   client: LingoChunkClient,
@@ -320,5 +359,152 @@ export function registerTools(
           size_bytes: clip.data.byteLength,
         });
       }),
+  );
+
+  // --- Write tools (phase 3) ----------------------------------------------
+
+  server.registerTool(
+    "list_decks",
+    {
+      title: "List decks",
+      description:
+        "List the user's study decks so you can pick a deck_id before adding " +
+        "cards (add_card) or exporting (export_anki_deck). Each deck reports its " +
+        "language and card counts (total / new / due). Requires the cards:write " +
+        "or decks:export scope.",
+      inputSchema: {},
+    },
+    async () => runJson(() => client.listDecks()),
+  );
+
+  server.registerTool(
+    "add_card",
+    {
+      title: "Add a card",
+      description:
+        "Add a card to the user's LingoChunk review queue (FSRS; it starts as " +
+        "'new'). kind=vocab adds a word the user ALREADY has in their vocabulary, " +
+        "resolved by lemma against their own content (404 if the lemma is not in " +
+        "their vocabulary); if that lemma occurs in several episodes, pass " +
+        "submission_id to disambiguate. kind=custom adds a freeform card and " +
+        "REQUIRES front, back and submission_id (the episode it anchors to). Omit " +
+        "deck_id to use the per-language 'External' deck (created on first use); " +
+        "External decks feed in-app review but CANNOT be exported to Anki yet, so " +
+        "pass an exportable deck_id from list_decks if you need an .apkg. A 409 " +
+        "means the card already exists: that is expected, not worth retrying (a " +
+        "409 mentioning several submissions instead means pass submission_id). " +
+        "Requires the cards:write scope.",
+      inputSchema: {
+        deck_id: z
+          .number()
+          .int()
+          .optional()
+          .describe("Target deck id from list_decks; omit for the External deck."),
+        kind: z
+          .enum(["vocab", "custom"])
+          .describe("vocab = a word from your vocabulary; custom = freeform front/back."),
+        lemma: z
+          .string()
+          .max(200)
+          .optional()
+          .describe("Dictionary form to add (kind=vocab)."),
+        pos: z
+          .string()
+          .max(20)
+          .optional()
+          .describe("Part of speech, to disambiguate the lemma (kind=vocab)."),
+        submission_id: z
+          .string()
+          .optional()
+          .describe(
+            "Disambiguate the lemma to one episode (kind=vocab); the episode the " +
+              "card anchors to (REQUIRED for kind=custom).",
+          ),
+        front: z
+          .string()
+          .max(500)
+          .optional()
+          .describe("Front/prompt text (kind=custom)."),
+        back: z
+          .string()
+          .max(1000)
+          .optional()
+          .describe("Back/answer text (kind=custom)."),
+        note: z
+          .string()
+          .max(1000)
+          .optional()
+          .describe("Optional note shown on the card (kind=custom)."),
+      },
+    },
+    async (args) => {
+      // Mirror the server's cross-field rules so the message is precise and no
+      // request is wasted.
+      if (args.kind === "vocab" && !args.lemma) {
+        return errorResult(new Error("add_card kind=vocab requires 'lemma'."));
+      }
+      if (
+        args.kind === "custom" &&
+        !(args.front && args.back && args.submission_id)
+      ) {
+        return errorResult(
+          new Error(
+            "add_card kind=custom requires 'front', 'back' and 'submission_id'.",
+          ),
+        );
+      }
+      return runJson(() => client.addCard(args));
+    },
+  );
+
+  server.registerTool(
+    "export_anki_deck",
+    {
+      title: "Export an Anki deck",
+      description:
+        "Export one of the user's decks to an Anki .apkg and return a download " +
+        "URL. Running it costs nothing (no LLM). This starts the export and then " +
+        "polls for up to ~60s: it returns {status:'ready', download_url} when the " +
+        "file is ready, {status:'pending'} with a note to call again shortly if " +
+        "it is still generating, or {status:'failed'} to retry. Only a deck with " +
+        "a linked source episode can be exported; the per-language External deck " +
+        "(and other multi-source decks) return a 400. Use list_decks to find an " +
+        "exportable deck_id. Requires the decks:export scope.",
+      inputSchema: {
+        deck_id: z.number().int().describe("The deck to export (from list_decks)."),
+      },
+    },
+    async ({ deck_id }) => runResult(() => exportAndPoll(client, deck_id)),
+  );
+
+  server.registerTool(
+    "save_lesson",
+    {
+      title: "Save a lesson",
+      description:
+        "Save a single self-contained HTML lesson to the user's private " +
+        "LingoChunk library (10 MB max, up to 100 lessons, private by default). " +
+        "Returns the lesson metadata plus a short-lived view URL to open it now; " +
+        "its durable home is the app's library, where it opens on any device. Use " +
+        "this to keep a lesson the lingochunk-lesson skill produced. Requires the " +
+        "lessons:write scope.",
+      inputSchema: {
+        title: z.string().min(1).max(255).describe("Lesson title."),
+        language: z
+          .string()
+          .min(1)
+          .max(10)
+          .describe("Target language, ISO 639-1."),
+        html: z
+          .string()
+          .min(1)
+          .describe("The complete self-contained HTML document."),
+        source_submission_ids: z
+          .array(z.string())
+          .optional()
+          .describe("Optional provenance: the episode ids the lesson was built from."),
+      },
+    },
+    async (args) => runJson(() => client.createLesson(args)),
   );
 }

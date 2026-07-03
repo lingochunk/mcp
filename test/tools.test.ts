@@ -83,6 +83,21 @@ function mockFetchReject(err: unknown): void {
   );
 }
 
+/** Install a fetch mock that returns each response in order (one read each);
+ *  throws if the code fetches more times than expected. Records every URL. */
+function mockFetchSequence(responses: Response[]): void {
+  let i = 0;
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: string | URL, init?: RequestInit) => {
+      lastUrl = String(input);
+      lastInit = init ?? {};
+      if (i >= responses.length) throw new Error("unexpected extra fetch");
+      return responses[i++]!;
+    }),
+  );
+}
+
 async function call(name: string, args: Record<string, unknown>): Promise<CallToolResult> {
   const tool = tools.get(name);
   if (!tool) throw new Error(`no handler for ${name}`);
@@ -100,15 +115,19 @@ function textOf(result: CallToolResult): string {
 }
 
 describe("tool registration", () => {
-  it("registers all seven tools", () => {
+  it("registers all eleven tools", () => {
     expect([...tools.keys()].sort()).toEqual(
       [
+        "add_card",
+        "export_anki_deck",
         "get_audio_clip",
         "get_audio_url",
         "get_transcript",
         "get_vocabulary",
+        "list_decks",
         "list_library",
         "lookup_word",
+        "save_lesson",
         "search_examples",
       ].sort(),
     );
@@ -399,5 +418,132 @@ describe("input validation and URL building", () => {
     expect(result.isError).toBe(true);
     expect(textOf(result)).toContain("60 seconds");
     expect(spy).not.toHaveBeenCalled();
+  });
+});
+
+describe("write tools", () => {
+  it("list_decks GETs /decks and returns the JSON", async () => {
+    mockFetch(jsonResponse({ decks: [] }));
+    const result = await call("list_decks", {});
+    expect(lastUrl).toBe("https://api.test/api/v1/decks");
+    expect(lastInit.method).toBe("GET");
+    expect(JSON.parse(textOf(result))).toEqual({ decks: [] });
+  });
+
+  it("add_card POSTs the card body to /cards", async () => {
+    mockFetch(
+      jsonResponse(
+        { deck_id: 1, card_id: 10, card_type: "vocab", state: "new" },
+        201,
+      ),
+    );
+    await call("add_card", { kind: "vocab", lemma: "Haus" });
+    expect(lastUrl).toBe("https://api.test/api/v1/cards");
+    expect(lastInit.method).toBe("POST");
+    expect(JSON.parse(String(lastInit.body))).toEqual({
+      kind: "vocab",
+      lemma: "Haus",
+    });
+  });
+
+  it("add_card kind=custom without back/submission_id errors client-side", async () => {
+    const spy = vi.fn();
+    vi.stubGlobal("fetch", spy);
+    const result = await call("add_card", { kind: "custom", front: "Guten Tag" });
+    expect(result.isError).toBe(true);
+    const text = textOf(result);
+    expect(text).toContain("front");
+    expect(text).toContain("back");
+    expect(text).toContain("submission_id");
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it("add_card surfaces a 409 already-exists as a friendly message", async () => {
+    mockFetch(jsonResponse({ detail: "This word is already in that deck" }, 409));
+    const result = await call("add_card", { kind: "vocab", lemma: "Haus" });
+    expect(result.isError).toBe(true);
+    expect(textOf(result)).toContain("already in that deck");
+  });
+
+  it("add_card surfaces a 403 missing-scope with remediation", async () => {
+    mockFetch(
+      jsonResponse(
+        { detail: "This token is missing the required scope(s): cards:write" },
+        403,
+      ),
+    );
+    const result = await call("add_card", { kind: "vocab", lemma: "Haus" });
+    expect(result.isError).toBe(true);
+    const text = textOf(result);
+    expect(text).toContain("cards:write");
+    expect(text).toContain("Mint a new token");
+  });
+
+  it("export_anki_deck surfaces a 400 for a non-exportable (External) deck", async () => {
+    mockFetch(
+      jsonResponse(
+        { detail: "This deck cannot be exported (it has no linked submission)." },
+        400,
+      ),
+    );
+    const result = await call("export_anki_deck", { deck_id: 3 });
+    expect(result.isError).toBe(true);
+    expect(textOf(result)).toContain("cannot be exported");
+  });
+
+  it("export_anki_deck polls queued -> pending -> ready and returns the URL", async () => {
+    vi.useFakeTimers();
+    try {
+      mockFetchSequence([
+        jsonResponse({ status: "queued", poll: "/api/v1/decks/7/export/status" }),
+        jsonResponse({ status: "pending" }),
+        jsonResponse({ status: "ready", download_url: "https://r2/deck.apkg" }),
+      ]);
+      const p = call("export_anki_deck", { deck_id: 7 });
+      await vi.advanceTimersByTimeAsync(2100);
+      const result = await p;
+      const payload = JSON.parse(textOf(result));
+      expect(payload.status).toBe("ready");
+      expect(payload.download_url).toBe("https://r2/deck.apkg");
+      expect(lastUrl).toBe("https://api.test/api/v1/decks/7/export/status");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("save_lesson POSTs the lesson to /lessons", async () => {
+    mockFetch(
+      jsonResponse(
+        {
+          id: "l1",
+          title: "T",
+          language: "de",
+          size_bytes: 9,
+          source_submission_ids: [],
+          created_at: "2026-07-03T00:00:00Z",
+          view_url: "https://r2/l1",
+        },
+        201,
+      ),
+    );
+    await call("save_lesson", { title: "T", language: "de", html: "<h1></h1>" });
+    expect(lastUrl).toBe("https://api.test/api/v1/lessons");
+    expect(lastInit.method).toBe("POST");
+    expect(JSON.parse(String(lastInit.body))).toEqual({
+      title: "T",
+      language: "de",
+      html: "<h1></h1>",
+    });
+  });
+
+  it("save_lesson surfaces the 413 size-cap message", async () => {
+    mockFetch(jsonResponse({ detail: "Lesson HTML exceeds the 10 MB cap." }, 413));
+    const result = await call("save_lesson", {
+      title: "T",
+      language: "de",
+      html: "<h1></h1>",
+    });
+    expect(result.isError).toBe(true);
+    expect(textOf(result)).toContain("10 MB cap");
   });
 });

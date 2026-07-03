@@ -19,6 +19,18 @@ export interface AudioClip {
   contentType: string;
 }
 
+/** Result of POST /decks/{id}/export. */
+export interface DeckExportStart {
+  status: "ready" | "queued";
+  poll: string;
+}
+
+/** Result of GET /decks/{id}/export/status. */
+export interface DeckExportStatus {
+  status: "ready" | "pending" | "failed" | "none";
+  download_url?: string;
+}
+
 export type QueryValue = string | number | boolean | undefined | null;
 
 /** How long any single request may take before we abort it. */
@@ -147,6 +159,22 @@ export class LingoChunkClient {
     return (await res.json()) as T;
   }
 
+  /** POST a JSON body to an endpoint and parse the JSON response. */
+  private async postJson<T>(path: string, body?: unknown): Promise<T> {
+    const headers = this.authHeaders("application/json");
+    if (body !== undefined) headers["Content-Type"] = "application/json";
+    const res = await fetch(this.buildUrl(path), {
+      method: "POST",
+      headers,
+      body: body === undefined ? undefined : JSON.stringify(body),
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    });
+    if (!res.ok) {
+      await this.raiseForStatus(res);
+    }
+    return (await res.json()) as T;
+  }
+
   // --- Read endpoints (thin pass-throughs; the tools shape the arguments) ---
 
   getVocabulary(params: Record<string, QueryValue>): Promise<unknown> {
@@ -179,6 +207,29 @@ export class LingoChunkClient {
 
   searchExamples(params: Record<string, QueryValue>): Promise<unknown> {
     return this.getJson("/sentences/search", params);
+  }
+
+  // --- Write endpoints (phase 3) ------------------------------------------
+
+  listDecks(): Promise<unknown> {
+    return this.getJson("/decks");
+  }
+
+  addCard(body: object): Promise<unknown> {
+    return this.postJson("/cards", body);
+  }
+
+  createLesson(body: object): Promise<unknown> {
+    return this.postJson("/lessons", body);
+  }
+
+  /** Start an Anki export (no body). 400 for a deck with no linked submission. */
+  exportDeck(deckId: number): Promise<DeckExportStart> {
+    return this.postJson(`/decks/${deckId}/export`);
+  }
+
+  exportDeckStatus(deckId: number): Promise<DeckExportStatus> {
+    return this.getJson(`/decks/${deckId}/export/status`);
   }
 
   /** GET a clip as raw audio bytes (the endpoint streams audio, not JSON). */
