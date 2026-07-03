@@ -54,6 +54,11 @@ npm install     # installs deps and builds dist/ (via the prepare script)
 export LINGOCHUNK_TOKEN=lcp_your_token_here
 ```
 
+**Run `npm install` before adding the plugin.** `dist/` is gitignored and does
+not exist in a fresh checkout; the `prepare` script builds it during
+`npm install`. Until it does, `.mcp.json` points at a `dist/index.js` that is not
+there and the server will not start.
+
 Then add the plugin from its local path in Claude Code (plugin install from a
 local directory), or copy the MCP block from `.mcp.json` into your Claude Code
 MCP config, replacing `${CLAUDE_PLUGIN_ROOT}` with the absolute path to this repo.

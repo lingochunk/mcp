@@ -34,34 +34,51 @@ user to add the LingoChunk MCP server (see the plugin README) and stop.
    `transcript_state`: only `ready` has usable sentences; `processing` means try
    again later, `unavailable` means pick another episode.
 
-3. **Gather and filter vocabulary.** Call `get_vocabulary(status=known)` and
-   `get_vocabulary(status=learning)` for the language. This is the differentiator:
-   - EXCLUDE `known` (review-state) words from the glossary and gap-fill blanks -
-     do not quiz the user on words they have already mastered.
-   - PRIORITISE `learning` and `new` words the episode actually contains.
+3. **Gather and filter vocabulary.** You need two sets: the words to EXCLUDE and
+   the words to DRILL. This filtering is the differentiator.
+   - **Exclusion set:** `get_vocabulary(status=known)` for the language. These are
+     FSRS review-state words (scheduled out for now). This list is
+     cursor-paginated: pass `limit=200` and keep following `next_cursor` until it
+     returns null before treating the set as complete, or a known word on a later
+     page will slip into an exercise.
+   - **Due words:** `get_vocabulary(status=due)` as well. These are review-state
+     words whose review has come up: do NOT exclude them. FLAG them in the
+     glossary and allow them in exercises, since they are exactly what is worth
+     practising now.
+   - **Drill words:** `get_vocabulary(status=learning)` and
+     `get_vocabulary(status=new)` for the words to prioritise.
+   - Net rule: exclude known-and-not-due words; prioritise `learning` and `new`;
+     include `due` words and mark them.
    - For any word you are unsure about, `lookup_word` to ground its meaning,
      gender and CEFR instead of inventing them.
 
 4. **Fetch audio clips.** For each sentence you want the learner to hear, call
    `get_audio_clip(submission_id, start, end)` using that sentence's start/end
-   from the transcript (keep clips short, a few seconds). The tool SAVES each
-   clip to a local file and returns its `path`. Read each file and inline it into
-   the HTML as a `data:` URI (base64) so the lesson is one self-contained file
-   with no external dependencies. A dozen 5-10s clips at ~128 kbps stays well
-   under 2 MB.
+   from the transcript. Keep clips short, about 5 seconds each. The tool SAVES
+   each clip to a local file and returns `{path, media_type, size_bytes}`. Read
+   the file and inline it as a `data:` URI, using the RETURNED `media_type` (e.g.
+   `data:audio/mpeg;base64,...` or `data:audio/mp4;base64,...`) rather than a
+   hardcoded type, so the lesson is one self-contained file with no external
+   dependencies. Base64 inflates the bytes by about 1.33x, so around a dozen
+   5-second clips lands near 1 to 1.5 MB, comfortably shareable.
+   If `get_audio_clip` fails (a 503 when clipping is unavailable, or a 429 rate
+   limit), do NOT abort: build the lesson with fewer clips or none, and say in the
+   lesson that audio was unavailable.
 
 5. **Generate the lesson.** Copy `assets/lesson-template.html` (in this skill
    directory) and fill in its marked sections. Keep the template's CSS and JS -
    they make the exercises work with no backend. Produce exercises from the real
    material:
-   - **Gap-fill** from real sentences (blank a `learning`/`new` target word).
+   - **Gap-fill** from real sentences (blank a `learning`, `new` or `due` target
+     word).
    - **Multiple choice** with distractors drawn from the user's own vocabulary
      of the same part of speech, so the wrong answers are plausible.
    - **Listening comprehension**: play a clip, ask what was said or for the gist.
    - **Blur-reveal**: show a sentence with the translation blurred, in the spirit
      of the app's freeform cards; click to reveal.
    Include a small glossary of the target words (meaning, gender, CEFR), with the
-   audio clip for each where you have one.
+   audio clip for each where you have one, and mark the `due` words so the learner
+   knows to prioritise them.
 
 6. **Deliver.** Write the finished HTML to a file the user can open in a browser
    (offer a sensible path/name). Summarise what the lesson covers and which words
@@ -72,10 +89,12 @@ user to add the LingoChunk MCP server (see the plugin README) and stop.
 - **One self-contained HTML file.** All audio inlined as data URIs, all CSS and
   JS inline. No relative asset paths, no CDN links (the app's lesson artefacts
   are meant to be downloadable, offline-capable and shareable).
-- **LingoChunk is the system of record for word knowledge.** Never quiz the user
-  on words `get_vocabulary(status=known)` marks mature. Exercise results stay in
-  the lesson (in-session); do NOT try to write grades back - there is no such
-  tool, by design.
+- **LingoChunk is the system of record for word knowledge.** Do not quiz the user
+  on a word `get_vocabulary(status=known)` returns UNLESS it is also `due`. FSRS
+  review state means the word is scheduled for later, not that it is permanently
+  mastered; `due` words are the ones to practise now. Exercise results stay in the
+  lesson (in-session); do NOT try to write grades back - there is no such tool, by
+  design.
 - **Ground, do not invent.** Meanings, genders and CEFR come from `lookup_word` /
   `get_vocabulary`, not from guessing. Every example sentence and its timestamps
   come from `get_transcript` / `search_examples` - use the real ones.

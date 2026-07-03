@@ -1,21 +1,23 @@
 # Integration recipe: fluent
 
-[fluent](https://github.com/m98/fluent) (and forks such as
-[srsatt/fluent](https://github.com/srsatt/fluent)) is a Claude Code / Codex
+[srsatt/fluent](https://github.com/srsatt/fluent) is a Claude Code / Codex
 **plugin** that turns a coding agent into a personal language tutor: a set of
-skill prompts plus small local scripts plus its own MCP server. It has no HTTP
-client and no API-key surface, so its only extension mechanism is "more MCP
-tools in the same agent runtime". That is exactly what this plugin provides.
+skill prompts plus small local scripts plus its own MCP server. It is a fork of
+the upstream [m98/fluent](https://github.com/m98/fluent) that adds an RSS +
+local whisper.cpp listening pipeline and that MCP server on top. It has no HTTP
+client and no API-key surface of its own, so its only extension mechanism is
+"more MCP tools in the same agent runtime". That is exactly what this plugin
+provides.
 
 The point of integration: fluent's tutor otherwise invents vocabulary "from thin
-air" (an LLM picks "high-frequency words"), and its listening pipeline makes the
-user configure a local whisper.cpp. LingoChunk replaces both with the user's
-real, FSRS-graded listening history. **No fluent code changes are required, only
-prompt additions.**
+air" (an LLM picks "high-frequency words"), and the fork's listening pipeline
+makes the user configure a local whisper.cpp against RSS feeds. LingoChunk
+replaces both with the user's real, FSRS-graded listening history. **No fluent
+code changes are required, only prompt additions.**
 
 ## Setup
 
-1. Create a LingoChunk personal access token (Settings -> API tokens) with the
+1. Create a LingoChunk personal access token (Settings -> API access) with the
    `vocab:read` and `content:read` scopes.
 2. Add the LingoChunk MCP server alongside fluent's own, in the same agent
    runtime (see this repo's README - either the plugin or a standalone

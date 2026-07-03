@@ -1,4 +1,8 @@
 <!doctype html>
+<!-- REPLACE: set lang to the lesson's target language, e.g. lang="de". Wrap
+     target-language text (sentences, gap answers, glossary words) in elements
+     with their own lang attribute, e.g. <span lang="de">Haus</span>, so screen
+     readers and hyphenation use the right language for each snippet. -->
 <html lang="en">
   <head>
     <meta charset="utf-8" />
@@ -83,15 +87,25 @@
       .opt:hover { border-color: var(--iris); }
       .opt.correct { border-color: var(--green); background: #eef8f0; }
       .opt.wrong { border-color: var(--red); background: #fbeeea; }
+      /* A text marker as well as colour, so the result is not colour-only. */
+      .opt.correct::before { content: "\2713  "; font-weight: 700; }
+      .opt.wrong::before { content: "\2717  "; font-weight: 700; }
 
-      /* Blur-reveal */
+      /* Blur-reveal (a <button>, so it is keyboard-operable) */
       .reveal {
         filter: blur(5px);
         cursor: pointer;
         transition: filter 0.15s ease;
         border-radius: 4px;
+        font: inherit;
+        color: inherit;
+        background: transparent;
+        border: 0;
+        padding: 0;
+        text-align: left;
       }
       .reveal.shown { filter: none; }
+      .reveal:focus-visible { outline: 2px solid var(--iris); outline-offset: 2px; }
 
       .actions { margin-top: 14px; }
       button.check {
@@ -136,6 +150,12 @@
     </style>
   </head>
   <body>
+    <noscript>
+      <p style="margin: 0; padding: 12px 20px; background: #fff3cd; color: #665500; text-align: center;">
+        This lesson's exercises need JavaScript enabled to check answers and
+        reveal translations.
+      </p>
+    </noscript>
     <main>
       <header>
         <!-- REPLACE: lesson title + one-line summary -->
@@ -147,12 +167,14 @@
            runtime at the bottom wires them up. Delete the example content and
            replace it with material from the LingoChunk tools. -->
 
-      <!-- EXAMPLE: gap-fill -->
+      <!-- EXAMPLE: gap-fill. data-answer accepts pipe-separated alternatives,
+           e.g. data-answer="Haus|Gebaeude". Give the FULL translation as the cue
+           so the missing word is unambiguous. -->
       <section>
         <h2><span class="tag">Gap-fill</span> Complete the sentence</h2>
-        <div class="sentence">
-          Das <input class="gap" data-answer="Haus" aria-label="blank" /> ist gross.
-          <div class="translation">The ___ is big.</div>
+        <div class="sentence" lang="de">
+          Das <input class="gap" data-answer="Haus" aria-label="missing word" /> ist groß.
+          <div class="translation" lang="en">The house is big.</div>
         </div>
         <div class="actions">
           <button class="check">Check</button>
@@ -163,22 +185,27 @@
       <!-- EXAMPLE: listening comprehension (inline the clip as a data URI) -->
       <section>
         <h2><span class="tag">Listening</span> What do you hear?</h2>
-        <!-- REPLACE the src with data:audio/mp4;base64,<clip bytes> -->
-        <audio controls src="data:audio/mp4;base64,"></audio>
+        <!-- REPLACE the src: inline the clip as data:<media_type>;base64,<bytes>,
+             using the media_type get_audio_clip returned (e.g. audio/mpeg or
+             audio/mp4), not a hardcoded type. -->
+        <audio controls src="data:audio/mpeg;base64,"></audio>
         <div class="mcq" data-correct="0">
-          <button class="opt">Das Haus ist gross.</button>
-          <button class="opt">Das Auto ist klein.</button>
-          <button class="opt">Der Baum ist alt.</button>
+          <button class="opt" lang="de">Das Haus ist groß.</button>
+          <button class="opt" lang="de">Das Auto ist klein.</button>
+          <button class="opt" lang="de">Der Baum ist alt.</button>
         </div>
       </section>
 
-      <!-- EXAMPLE: blur-reveal (translation hidden until clicked) -->
+      <!-- EXAMPLE: blur-reveal. The hidden translation is a <button>, so it can
+           be focused and toggled with Enter/Space, not just clicked. -->
       <section>
         <h2><span class="tag">Recall</span> Translate, then reveal</h2>
-        <div class="sentence">
+        <div class="sentence" lang="de">
           Wir gehen nach Hause.
           <div class="translation">
-            <span class="reveal">We are going home.</span>
+            <button type="button" class="reveal" lang="en" aria-label="Reveal the translation">
+              We are going home.
+            </button>
           </div>
         </div>
       </section>
@@ -192,10 +219,10 @@
           </thead>
           <tbody>
             <tr>
-              <td>das Haus</td>
+              <td lang="de">das Haus</td>
               <td>the house</td>
               <td><span class="cefr">A1</span></td>
-              <td><audio controls src="data:audio/mp4;base64,"></audio></td>
+              <td><audio controls src="data:audio/mpeg;base64,"></audio></td>
             </tr>
           </tbody>
         </table>
@@ -219,9 +246,13 @@
             var gaps = section.querySelectorAll(".gap");
             var all = true;
             gaps.forEach(function (gap) {
-              var want = (gap.dataset.answer || "").trim().toLowerCase();
+              // data-answer may list pipe-separated alternatives; any match wins.
+              var wants = (gap.dataset.answer || "")
+                .split("|")
+                .map(function (s) { return s.trim().toLowerCase(); })
+                .filter(function (s) { return s.length > 0; });
               var got = (gap.value || "").trim().toLowerCase();
-              var ok = want.length > 0 && got === want;
+              var ok = wants.indexOf(got) !== -1;
               gap.classList.toggle("correct", ok);
               gap.classList.toggle("wrong", !ok);
               if (!ok) all = false;
