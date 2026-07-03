@@ -18,7 +18,7 @@ describe("loadConfig", () => {
     const config = loadConfig({ LINGOCHUNK_TOKEN: "lcp_x" });
     expect(config.token).toBe("lcp_x");
     expect(config.baseUrl).toBe("https://lingochunk.com");
-    expect(config.clipDir).toBe(path.join(os.tmpdir(), "lingochunk-mcp"));
+    expect(config.clipDir).toBe(path.join(os.homedir(), ".cache", "lingochunk-mcp"));
   });
 
   it("honours overrides and strips a trailing slash from the base URL", () => {

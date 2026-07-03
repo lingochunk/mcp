@@ -19,8 +19,8 @@ const DEFAULT_BASE_URL = "https://lingochunk.com";
  * - LINGOCHUNK_TOKEN    (required) the personal access token, created in the
  *   LingoChunk account settings. Must start with "lcp_".
  * - LINGOCHUNK_BASE_URL (optional) override the API origin (default production).
- * - LINGOCHUNK_CLIP_DIR (optional) where audio clips are saved (default the OS
- *   temp dir under a lingochunk-mcp/ folder).
+ * - LINGOCHUNK_CLIP_DIR (optional) where audio clips are saved (default a
+ *   private per-user cache dir, ~/.cache/lingochunk-mcp).
  *
  * Throws a clear error when the token is missing, so onboarding fails loudly
  * rather than sending unauthenticated requests.
@@ -54,8 +54,12 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     );
   }
 
+  // Default to a private per-user cache dir rather than the world-readable
+  // shared temp dir: clips are the user's own study audio, so they should not
+  // land somewhere every account on the machine can read.
   const clipDir =
-    env.LINGOCHUNK_CLIP_DIR?.trim() || path.join(os.tmpdir(), "lingochunk-mcp");
+    env.LINGOCHUNK_CLIP_DIR?.trim() ||
+    path.join(os.homedir(), ".cache", "lingochunk-mcp");
 
   return { baseUrl, token, clipDir };
 }

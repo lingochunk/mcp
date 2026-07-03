@@ -79,7 +79,7 @@ claude mcp add lingochunk --env LINGOCHUNK_TOKEN=lcp_... -- node /absolute/path/
 |---|---|---|---|
 | `LINGOCHUNK_TOKEN` | yes | - | Your personal access token (`lcp_...`). |
 | `LINGOCHUNK_BASE_URL` | no | `https://lingochunk.com` | API origin override (for self-host/testing). |
-| `LINGOCHUNK_CLIP_DIR` | no | OS temp dir `/lingochunk-mcp` | Where `get_audio_clip` writes clip files. |
+| `LINGOCHUNK_CLIP_DIR` | no | `~/.cache/lingochunk-mcp` | Where `get_audio_clip` writes clip files (a private per-user dir, created mode 0700). |
 
 The token is only ever sent as an `Authorization: Bearer` header to the
 configured origin; it is never written to disk or logged.

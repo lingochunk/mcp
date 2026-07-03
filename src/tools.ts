@@ -306,7 +306,9 @@ export function registerTools(
           );
         }
         const clip = await client.getAudioClip(submission_id, start, end);
-        await fs.mkdir(config.clipDir, { recursive: true });
+        // 0o700: the clip dir holds the user's own study audio, so keep it
+        // readable only by them (mode applies to dirs this call creates).
+        await fs.mkdir(config.clipDir, { recursive: true, mode: 0o700 });
         const filename = `clip-${sanitise(submission_id)}-${start}-${end}${extensionFor(
           clip.contentType,
         )}`;
