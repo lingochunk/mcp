@@ -5,15 +5,17 @@ Code plugin) that turns a coding agent into a language tutor grounded in **your
 own LingoChunk listening history**: your FSRS-graded vocabulary, native-audio
 transcripts and clips, and your library.
 
-It is a thin, read-only client over the LingoChunk public API (`/api/v1`). The
-app stays closed source; this repo is just the client, the committed API spec,
-and two lesson skills.
+It is a thin client over the LingoChunk public API (`/api/v1`): read-only tools
+for your vocabulary, transcripts and audio, plus write tools to add review cards,
+export Anki decks and save lessons. The app stays closed source; this repo is
+just the client, the committed API spec, and two lesson skills.
 
 > Status: local/preview. Not yet published to npm and not yet a public repo.
 
 ## What it gives an agent
 
-Seven tools, each wrapping one public endpoint:
+Eleven tools, each wrapping one public endpoint. The first seven are read-only;
+the last four (phase 3) write to your account.
 
 | Tool | Scope | What it does |
 |---|---|---|
@@ -24,6 +26,10 @@ Seven tools, each wrapping one public endpoint:
 | `get_audio_url` | `content:read` | A short-lived presigned URL to the full native audio (Range-capable). |
 | `search_examples` | `content:read` | Example sentences across your library, by word (`lemma`) or text (`q`). A capped sample, not exhaustive. |
 | `get_audio_clip` | `content:read` | Cuts a short native-audio snippet, **saves it to a local file**, and returns `{path, media_type, size_bytes}` for embedding in lessons. |
+| `list_decks` | `cards:write` or `decks:export` | Your study decks with card counts, for picking a `deck_id` to add to or export. |
+| `add_card` | `cards:write` | Adds a card to your review queue (FSRS, starts new): `kind=vocab` from your vocabulary, or `kind=custom` front/back. Omit `deck_id` for the per-language External deck. |
+| `export_anki_deck` | `decks:export` | Exports a deck to Anki `.apkg` (no LLM), polling internally; returns a download URL when ready. External decks can't be exported. |
+| `save_lesson` | `lessons:write` | Saves a self-contained HTML lesson to your private library (10 MB cap, 100 max); returns metadata + a short-lived view URL. |
 
 Plus two skills:
 
@@ -37,8 +43,9 @@ Plus two skills:
 
 - Node.js >= 18.
 - A LingoChunk **personal access token**: in LingoChunk, open Settings -> API
-  access, create a token, and grant the scopes you need (`vocab:read` and
-  `content:read` cover everything here). The token is shown once and starts with
+  access, create a token, and grant the scopes you need (`vocab:read` +
+  `content:read` cover the read tools; add `cards:write`, `decks:export` and
+  `lessons:write` for the write tools). The token is shown once and starts with
   `lcp_`. The 403 errors from the tools name the exact scope you are missing.
 
 ## Use it

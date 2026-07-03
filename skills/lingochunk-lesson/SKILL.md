@@ -81,8 +81,15 @@ user to add the LingoChunk MCP server (see the plugin README) and stop.
    knows to prioritise them.
 
 6. **Deliver.** Write the finished HTML to a file the user can open in a browser
-   (offer a sensible path/name). Summarise what the lesson covers and which words
-   it drills.
+   (offer a sensible path/name). You can ALSO offer to `save_lesson` it to their
+   LingoChunk library: that stores the lesson in the app (private by default) and
+   returns a link that opens on any device, so it is not tied to this machine.
+   Keeping the local file and saving to the library are both fine; offer both.
+   If the lesson introduced words the learner should keep studying, offer to
+   `add_card` them to their review queue (`kind=vocab` by lemma, or `kind=custom`
+   for a freeform card). A 409 just means the word is already there, which is
+   fine: skip it and carry on. Do not add words `get_vocabulary(status=known)`
+   already covers. Then summarise what the lesson covers and which words it drills.
 
 ## Hard rules
 
