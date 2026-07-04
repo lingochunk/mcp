@@ -30,5 +30,13 @@
     "@types/node": "^22.0.0",
     "typescript": "^5.6.0",
     "vitest": "^2.1.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lxol/lingochunk-mcp.git"
+  },
+  "homepage": "https://github.com/lxol/lingochunk-mcp#readme",
+  "bugs": {
+    "url": "https://github.com/lxol/lingochunk-mcp/issues"
   }
 }
