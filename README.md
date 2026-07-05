@@ -8,7 +8,8 @@ transcripts and clips, and your library.
 It is a thin client over the LingoChunk public API (`/api/v1`): read-only tools
 for your vocabulary, transcripts and audio, plus write tools to add review cards,
 export Anki decks and save lessons. The app stays closed source; this repo is
-just the client, the committed API spec, and two lesson skills.
+the client, the committed API spec, and the skills - and the skills are open to
+contributions (see [CONTRIBUTING.md](CONTRIBUTING.md)).
 
 > Install: `/plugin marketplace add lxol/lingochunk-mcp` in Claude Code (server
 > plus lesson skills), or `npx -y @lingochunk/mcp` as a standalone MCP server.
@@ -105,23 +106,40 @@ configured origin; it is never written to disk or logged.
 Ask your agent something like "build me a lesson from yesterday's German episode"
 or "quiz me on the words I'm learning". The `lingochunk-lesson` skill drives the
 workflow: pick the source, pull a transcript slice, gather and **filter** your
-vocabulary (never quizzing you on mastered words), fetch short audio clips, and
-render one shareable HTML file. See `skills/lingochunk-lesson/`.
+vocabulary (never quizzing you on mastered words), then compose a structured
+`lesson.v1` document that the app renders natively - real episode audio, live
+word state, crosslinks, Ask AI - with an offline HTML export available in-app.
+A submission can hold many lessons, so different skills (or repeated runs) add
+lessons side by side under the episode's Lessons tab. See
+`skills/lingochunk-lesson/`.
 
 ## Repository layout
 
 ```
 src/                                    the MCP server (TypeScript, stdio)
-skills/lingochunk-lesson/               the lesson skill
-skills/lingochunk-lesson/assets/lesson-template.html   self-contained HTML template
+skills/lingochunk-lesson/               the coursebook lesson skill
+skills/lingochunk-cards/                the flashcard (card.v1) skill
 skills/lingochunk-discuss/              the "discuss an episode" skill
+skills/*/examples/                      example lesson.v1 documents (CI-validated)
+docs/skill-authoring.md                 how to write a new skill
+docs/skill-template.md                  SKILL.md starting point
 docs/integrations/fluent.md             how to plug this into the fluent tutor plugin
 spec/openapi-public-v1.json             the committed public API spec (the contract)
+scripts/validate-lesson.ts              validate a lesson.v1 document against the spec
 scripts/smoke.ts                        live smoke test (run by hand, never in CI)
-test/                                   vitest unit tests (mocked fetch)
+test/                                   vitest unit tests (mocked fetch) + example validation
 .claude-plugin/plugin.json              Claude Code plugin manifest
 .mcp.json                               MCP server definition for the plugin
 ```
+
+## Contributing a skill
+
+Skills are markdown pedagogy, not code: a `SKILL.md` playbook plus an example
+`lesson.v1` document that CI validates against the committed spec. Anyone can
+contribute one - a dictation drill, an exam rehearsal, a due-words review
+session - and AI-drafted skills are explicitly welcome. Start with
+[CONTRIBUTING.md](CONTRIBUTING.md) and
+[docs/skill-authoring.md](docs/skill-authoring.md).
 
 ## Development
 
@@ -129,12 +147,13 @@ test/                                   vitest unit tests (mocked fetch)
 npm install        # deps + build (prepare)
 npm run build      # compile src/ -> dist/
 npm run typecheck  # type-check without emitting
-npm test           # vitest unit tests (mocked fetch; no network)
+npm test           # vitest unit tests (mocked fetch; no network) + skill example validation
+npm run validate:lesson -- <doc.json>   # validate a lesson.v1 document (Node 22.6+)
 ```
 
 `spec/openapi-public-v1.json` is the source contract; it is exported from the
 LingoChunk repo (`make generate-openapi-public`) and refreshed here on each API
-release. This copy was taken from LingoChunk commit `3c226795`.
+release. This copy was taken from LingoChunk commit `53005047`.
 
 ### Live smoke test
 
