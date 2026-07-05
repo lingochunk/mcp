@@ -90,6 +90,47 @@ npm install     # installs deps and builds dist/ via the prepare script
 claude mcp add lingochunk --env LINGOCHUNK_TOKEN=lcp_... -- node /absolute/path/to/lingochunk-mcp/dist/index.js
 ```
 
+## Use with other agents
+
+Nothing in the server is Claude-specific: it is a standard stdio MCP server,
+so any MCP-capable agent can run it. The recipe is always the same - run
+`npx -y @lingochunk/mcp` with `LINGOCHUNK_TOKEN` in its environment - and
+most clients express it as JSON like this:
+
+```json
+{
+  "mcpServers": {
+    "lingochunk": {
+      "command": "npx",
+      "args": ["-y", "@lingochunk/mcp"],
+      "env": { "LINGOCHUNK_TOKEN": "lcp_your_token_here" }
+    }
+  }
+}
+```
+
+Where that config lives per client (differences noted):
+
+| Client | Where |
+|---|---|
+| Claude Desktop | Settings -> Developer -> Edit Config (`claude_desktop_config.json`) |
+| Cursor | `~/.cursor/mcp.json`, or `.cursor/mcp.json` per project |
+| Windsurf | `~/.codeium/windsurf/mcp_config.json` |
+| VS Code (Copilot agent mode) | `.vscode/mcp.json`, with top-level key `servers` instead of `mcpServers` |
+| Gemini CLI | `~/.gemini/settings.json` |
+| Codex CLI | `~/.codex/config.toml`, as `[mcp_servers.lingochunk]` with the same command/args/env in TOML |
+
+Where your client supports it, prefer referencing an environment variable
+over pasting the token into the config file (VS Code can prompt for it via
+`inputs`; CLI clients usually inherit your shell environment).
+
+The skills are not Claude-specific either: each one is a plain-markdown
+playbook (`skills/<name>/SKILL.md`). Claude Code auto-loads them through the
+plugin; with any other agent, point it at the file (or paste it as context)
+and ask for a lesson. Every hard guarantee - the schema, verbatim transcript
+quoting, sentence positions - is enforced server-side on save, so the
+quality contract holds no matter which agent is driving.
+
 ## Configuration
 
 | Variable | Required | Default | Meaning |

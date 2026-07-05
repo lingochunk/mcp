@@ -159,6 +159,12 @@ personal access token (Settings -> API access) with `vocab:read`,
 `content:read` and `lessons:write` (plus `cards:write` if your skill offers
 add-to-deck).
 
+Not on Claude Code? Skills work with any MCP-capable agent: configure the
+server (see "Use with other agents" in the README), then point your agent
+at your `SKILL.md` file or paste it as context. Only the auto-discovery in
+steps 1-2 below is Claude Code specific; the rest of the checklist is
+identical.
+
 1. Install the plugin from your checkout so your skill is picked up:
    `/plugin marketplace add /absolute/path/to/your/lingochunk-mcp` then
    `/plugin install lingochunk@lingochunk-mcp` (export `LINGOCHUNK_TOKEN`
