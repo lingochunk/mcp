@@ -1,0 +1,227 @@
+{
+  "format": "lesson.v1",
+  "title": "Feierabend!",
+  "subtitle": "Das Perfekt mit sein und der Wortschatz nach der Arbeit",
+  "language": "de",
+  "translation_language": "en",
+  "level": "B1",
+  "source": {
+    "submission_id": "00000000-0000-0000-0000-000000000000",
+    "from_time": 252.0,
+    "to_time": 578.0,
+    "episode_title": "Feierabend! Der Alltagspodcast"
+  },
+  "objectives": [
+    "Verstehen, wie jemand seinen Feierabend beschreibt",
+    "Das Perfekt mit sein richtig bilden",
+    "Alltagswörter rund um den Feierabend aktiv verwenden"
+  ],
+  "estimated_minutes": 25,
+  "blocks": [
+    {
+      "type": "section",
+      "title": "Hören",
+      "subtitle": "Listen first, then read"
+    },
+    {
+      "type": "prose",
+      "text": "Hör dir die Szene an, ohne den Text zu lesen.",
+      "style": "instruction"
+    },
+    {
+      "type": "audio_slice",
+      "audio": { "start": 252.0, "end": 578.0 },
+      "label": "Feierabend (4:12 bis 9:38)"
+    },
+    {
+      "type": "exercise_mcq",
+      "title": "Globalverstehen",
+      "instruction": "Wähl die beste Antwort.",
+      "prompt": "Worüber sprechen Lena und Jonas?",
+      "options": [
+        "Über ihren Feierabend",
+        "Über das Wetter im Urlaub",
+        "Über einen Umzug"
+      ],
+      "correct": 0
+    },
+    {
+      "type": "section",
+      "title": "Text",
+      "subtitle": "Read along with the audio"
+    },
+    {
+      "type": "dialogue",
+      "lines": [
+        {
+          "position": 41,
+          "speaker": "Lena",
+          "text": "Endlich Feierabend! Ich bin heute total früh aufgestanden.",
+          "translation": "Finally done for the day! I got up really early today.",
+          "highlights": [[24, 27], [45, 57]]
+        },
+        {
+          "position": 42,
+          "speaker": "Jonas",
+          "text": "Und dann bist du mit dem Rad zur Arbeit gefahren?",
+          "translation": "And then you cycled to work?",
+          "highlights": [[9, 13], [40, 48]]
+        },
+        {
+          "position": 43,
+          "speaker": "Lena",
+          "text": "Nein, ich bin zu Fuß gegangen. Das Wetter war so schön.",
+          "translation": "No, I walked. The weather was so nice.",
+          "highlights": [[10, 13], [21, 29]]
+        },
+        {
+          "position": 44,
+          "speaker": "Jonas",
+          "text": "Ich habe den ganzen Tag E-Mails geschrieben.",
+          "translation": "I wrote emails all day."
+        }
+      ]
+    },
+    {
+      "type": "section",
+      "title": "Wortschatz",
+      "subtitle": "Words worth keeping"
+    },
+    {
+      "type": "vocab",
+      "entries": [
+        {
+          "lemma": "Feierabend",
+          "pos": "NOUN",
+          "display": "der Feierabend",
+          "meaning": "end of the working day",
+          "cefr": "B1",
+          "position": 41
+        },
+        {
+          "lemma": "aufstehen",
+          "pos": "VERB",
+          "display": "aufstehen",
+          "forms": "stand auf · ist aufgestanden",
+          "meaning": "to get up",
+          "cefr": "A2",
+          "position": 41
+        },
+        {
+          "lemma": "Rad",
+          "pos": "NOUN",
+          "display": "das Rad",
+          "meaning": "bicycle (short for Fahrrad)",
+          "cefr": "A2",
+          "position": 42
+        },
+        {
+          "lemma": "zu Fuß",
+          "meaning": "on foot",
+          "cefr": "A2",
+          "position": 43
+        }
+      ]
+    },
+    {
+      "type": "section",
+      "title": "Grammatik",
+      "subtitle": "One point, done properly"
+    },
+    {
+      "type": "grammar_box",
+      "title": "Das Perfekt mit sein",
+      "explanation": "Verben der Bewegung (gehen, fahren) und der Zustandsänderung (aufstehen, einschlafen) bilden das Perfekt mit sein: ich bin gegangen, du bist gefahren. Alle anderen Verben nehmen haben.",
+      "evidence": [
+        {
+          "position": 41,
+          "text": "Ich bin heute total früh aufgestanden.",
+          "note": "aufstehen = Zustandsänderung, also: sein"
+        },
+        {
+          "position": 42,
+          "text": "Und dann bist du mit dem Rad zur Arbeit gefahren?",
+          "note": "fahren = Bewegung, also: sein"
+        },
+        {
+          "position": 44,
+          "text": "Ich habe den ganzen Tag E-Mails geschrieben.",
+          "note": "schreiben = keine Bewegung, also: haben"
+        }
+      ],
+      "merke": "Bewegung oder Zustandsänderung: sein. Sonst: haben.",
+      "achtung": "Mit einem Objekt nimmt fahren haben: Ich habe das Auto in die Garage gefahren."
+    },
+    {
+      "type": "section",
+      "title": "Übungen",
+      "subtitle": "From recognition to production"
+    },
+    {
+      "type": "exercise_gap_fill",
+      "title": "sein oder haben?",
+      "instruction": "Ergänze die richtige Form im Perfekt.",
+      "wordbank": ["bin", "bist", "habe", "gefahren"],
+      "items": [
+        {
+          "position": 43,
+          "text": "Ich {{1}} zu Fuß gegangen.",
+          "answers": [["bin"]],
+          "translation": "I walked."
+        },
+        {
+          "position": 42,
+          "text": "Du {{1}} mit dem Rad zur Arbeit {{2}}.",
+          "answers": [["bist"], ["gefahren"]],
+          "translation": "You cycled to work."
+        },
+        {
+          "text": "Ich {{1}} den ganzen Tag E-Mails geschrieben.",
+          "answers": [["habe"]]
+        }
+      ]
+    },
+    {
+      "type": "exercise_mcq",
+      "title": "Hörverstehen",
+      "instruction": "Hör noch einmal und wähl die richtige Antwort.",
+      "audio": { "start": 300.0, "end": 315.0 },
+      "position": 43,
+      "prompt": "Wie ist Lena zur Arbeit gekommen?",
+      "options": ["Zu Fuß", "Mit dem Rad", "Mit dem Bus"],
+      "correct": 0
+    },
+    {
+      "type": "exercise_match",
+      "title": "Ordne zu",
+      "instruction": "Verbinde das Wort mit seiner Bedeutung.",
+      "pairs": [
+        { "left": "der Feierabend", "right": "end of the working day" },
+        { "left": "aufstehen", "right": "to get up" },
+        { "left": "zu Fuß", "right": "on foot" },
+        { "left": "das Rad", "right": "bicycle" }
+      ]
+    },
+    {
+      "type": "exercise_production",
+      "title": "Und dein Tag?",
+      "instruction": "Schreib zwei Sätze im Perfekt: einen mit sein, einen mit haben.",
+      "prompt": "Wie war dein Tag heute? Was hast du gemacht, und wohin bist du gegangen?",
+      "model_answer": "Ich bin um sieben Uhr aufgestanden. Danach habe ich einen Kaffee getrunken und E-Mails geschrieben."
+    },
+    {
+      "type": "section",
+      "title": "Wiederholung",
+      "subtitle": "What you can do now"
+    },
+    {
+      "type": "review",
+      "can_do": [
+        "Ich kann verstehen, wie jemand seinen Feierabend beschreibt.",
+        "Ich kann das Perfekt mit sein und haben richtig bilden.",
+        "Ich kann sagen, wie ich zur Arbeit komme."
+      ],
+      "new_lemmas": ["Feierabend", "aufstehen"]
+    }
+  ]
+}
