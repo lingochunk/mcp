@@ -6,6 +6,22 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { ApiError, type LingoChunkClient, type QueryValue } from "./client.js";
 import type { Config } from "./config.js";
 
+/** card.v1 kinds (POST /cards with format=card.v1). Mirrors the server's
+ *  CardKindV1 / CARD_V1_BLUR_KINDS in lingochunk_shared.models.public_v1. */
+const CARD_V1_KINDS = new Set([
+  "word",
+  "phrase",
+  "collocation",
+  "idiom",
+  "chunk",
+  "grammar",
+  "cloze",
+  "contrast",
+  "qa",
+  "production",
+]);
+const CARD_V1_BLUR_KINDS = new Set(["grammar", "cloze", "contrast", "production"]);
+
 /** Format a successful JSON result as a single text block. */
 function jsonResult(value: unknown): CallToolResult {
   return { content: [{ type: "text", text: JSON.stringify(value, null, 2) }] };
@@ -439,22 +455,33 @@ export function registerTools(
       title: "Add a card",
       description:
         "Add a card to the user's LingoChunk review queue (FSRS; it starts as " +
-        "'new'). kind=vocab adds a word the user ALREADY has in their vocabulary, " +
-        "resolved by lemma against their own content (404 if the lemma is not in " +
-        "their vocabulary; 409 code=ambiguous_lemma if it occurs in several " +
-        "episodes or under several parts of speech, so pass submission_id or pos " +
-        "as the message names). kind=custom adds a freeform card and REQUIRES " +
-        "front, back and submission_id (the episode it anchors to); pass " +
-        "sentence_position to anchor its example to a specific transcript " +
-        "sentence. Omit deck_id and the card goes to the deck for its own " +
-        "submission (the same deck the app builds, reviews and exports that " +
-        "episode from, so it is immediately visible and exportable); an explicit " +
-        "deck_id must belong to that submission (400 otherwise). A 409 " +
-        "code=duplicate_card means the card already exists: expected, not worth " +
-        "retrying. NOTE: deleting the anchoring episode deletes the card " +
-        "(cascade), and a card added while the app's Words tab is open on that " +
-        "episode may be overwritten by the app's own save, so add cards when the " +
-        "app is not actively editing that deck. Requires the cards:write scope.",
+        "'new'). PREFER the card.v1 kinds (word | phrase | collocation | idiom " +
+        "| chunk | grammar | cloze | contrast | qa | production): they produce " +
+        "native-grade cards - the server derives the highlight/blur painting " +
+        "and (for the lexical kinds) a native-audio clip of the focus span " +
+        "from the episode recording. Every card.v1 card anchors to a real " +
+        "transcript sentence: pass submission_id + sentence_position (from " +
+        "get_transcript) + headword + translation, and focus_span as a " +
+        "VERBATIM substring of that sentence (the exact surface form: 'habe', " +
+        "not 'haben'; copy it from the transcript, never paraphrase). " +
+        "grammar/cloze/contrast/production REQUIRE focus_span - it is the " +
+        "hidden answer - and reject with code=focus_span_not_verbatim if it " +
+        "does not match. Lexical kinds create a forward+reverse pair " +
+        "(direction=forward to skip the reverse); study kinds are forward-only. " +
+        "Responses carry a problems[] list of degradations (e.g. " +
+        "focus_span_no_timings) - fix and resend to clear them; resending the " +
+        "same headword updates the card in place (created=false), preserving " +
+        "review history. Read the lingochunk-cards skill for per-kind guidance " +
+        "and quality rules before batch-creating cards. LEGACY kinds still " +
+        "work: kind=vocab adds a word ALREADY in the user's vocabulary by " +
+        "lemma (409 code=ambiguous_lemma: pass submission_id or pos); " +
+        "kind=custom is a flat front/back card (409 code=duplicate_card is " +
+        "expected, not worth retrying). Omit deck_id and the card goes to the " +
+        "deck for its own submission (immediately visible, reviewable, " +
+        "exportable); an explicit deck_id must belong to that submission. " +
+        "NOTE: deleting the anchoring episode deletes the card (cascade), and " +
+        "a card added while the app's Words tab is open on that episode may be " +
+        "overwritten by the app's own save. Requires the cards:write scope.",
       inputSchema: {
         deck_id: z
           .number()
@@ -465,54 +492,208 @@ export function registerTools(
               "own submission. When given, it must belong to that submission.",
           ),
         kind: z
-          .enum(["vocab", "custom"])
-          .describe("vocab = a word from your vocabulary; custom = freeform front/back."),
-        lemma: z
+          .enum([
+            "word",
+            "phrase",
+            "collocation",
+            "idiom",
+            "chunk",
+            "grammar",
+            "cloze",
+            "contrast",
+            "qa",
+            "production",
+            "vocab",
+            "custom",
+          ])
+          .describe(
+            "card.v1 kinds: word/phrase/collocation/idiom/chunk (lexical; " +
+              "fwd+rev pair, span audio) and grammar/cloze/contrast/qa/" +
+              "production (study; forward-only, per-kind chrome). Legacy: " +
+              "vocab (existing word by lemma), custom (flat front/back).",
+          ),
+        // --- card.v1 fields ---
+        headword: z
           .string()
           .max(200)
-          .optional()
-          .describe("Dictionary form to add (kind=vocab)."),
-        pos: z
-          .string()
-          .max(20)
-          .optional()
-          .describe("Part of speech, to disambiguate the lemma (kind=vocab); case-insensitive."),
-        submission_id: z
-          .string()
           .optional()
           .describe(
-            "Disambiguate the lemma to one episode (kind=vocab); the episode the " +
-              "card anchors to (REQUIRED for kind=custom).",
+            "card.v1: citation form shown on the card; include the article for " +
+              "gendered nouns ('die Landschaft'). For qa this is the question.",
           ),
-        front: z
-          .string()
-          .max(200)
-          .optional()
-          .describe("Front/prompt text (kind=custom; max 200 chars)."),
-        back: z
+        translation: z
           .string()
           .max(500)
           .optional()
-          .describe("Back/answer text (kind=custom; max 500 chars)."),
-        note: z
-          .string()
-          .max(300)
-          .optional()
-          .describe("Optional note shown on the card (kind=custom; max 300 chars)."),
+          .describe(
+            "card.v1: learner-language gloss (lexical), the answer (qa), or " +
+              "the meaning prompt (production).",
+          ),
         sentence_position: z
           .number()
           .int()
           .min(1)
           .optional()
           .describe(
-            "1-based transcript position (see get_transcript) to anchor a custom " +
-              "card's example; defaults to the submission's first sentence.",
+            "1-based transcript position (see get_transcript). card.v1: the " +
+              "example sentence the card anchors to (REQUIRED). Legacy custom: " +
+              "optional example anchor.",
+          ),
+        focus_span: z
+          .string()
+          .max(150)
+          .optional()
+          .describe(
+            "card.v1: VERBATIM substring of the anchor sentence locating the " +
+              "target (drives highlight/blur + span audio). REQUIRED for " +
+              "grammar/cloze/contrast/production (it is the hidden answer).",
+          ),
+        context_positions: z
+          .array(z.number().int().min(1))
+          .max(4)
+          .optional()
+          .describe(
+            "card.v1: up to 4 neighbouring sentence positions shown as framing " +
+              "context.",
+          ),
+        hint: z
+          .string()
+          .max(160)
+          .optional()
+          .describe("card.v1: optional on-demand hint (stored in card_meta)."),
+        cefr: z
+          .enum(["A1", "A2", "B1", "B2", "C1", "C2"])
+          .optional()
+          .describe("card.v1: optional CEFR tag."),
+        options: z
+          .array(z.string().max(80))
+          .max(3)
+          .optional()
+          .describe("card.v1 contrast: the 2-3 confusable choices."),
+        correct: z
+          .string()
+          .max(80)
+          .optional()
+          .describe("card.v1 contrast: the right option; must be in options."),
+        question: z
+          .string()
+          .max(200)
+          .optional()
+          .describe("card.v1 qa: overrides headword as the displayed question."),
+        direction: z
+          .enum(["both", "forward"])
+          .optional()
+          .describe(
+            "card.v1 lexical kinds: 'both' (default) or 'forward' to skip the " +
+              "reverse twin. Study kinds are always forward-only.",
+          ),
+        // --- legacy fields ---
+        lemma: z
+          .string()
+          .max(200)
+          .optional()
+          .describe("Dictionary form to add (legacy kind=vocab)."),
+        pos: z
+          .string()
+          .max(20)
+          .optional()
+          .describe(
+            "Part of speech, to disambiguate the lemma (legacy kind=vocab); " +
+              "case-insensitive.",
+          ),
+        submission_id: z
+          .string()
+          .optional()
+          .describe(
+            "The episode the card anchors to (REQUIRED for card.v1 and legacy " +
+              "custom); disambiguates the lemma for legacy vocab.",
+          ),
+        front: z
+          .string()
+          .max(200)
+          .optional()
+          .describe("Front/prompt text (legacy kind=custom; max 200 chars)."),
+        back: z
+          .string()
+          .max(500)
+          .optional()
+          .describe("Back/answer text (legacy kind=custom; max 500 chars)."),
+        note: z
+          .string()
+          .max(300)
+          .optional()
+          .describe(
+            "One-line 'why', shown on the back note rail (card.v1 and legacy " +
+              "custom; max 300 chars).",
           ),
       },
     },
     async (args) => {
       // Mirror the server's cross-field rules so the message is precise and no
       // request is wasted.
+      if (CARD_V1_KINDS.has(args.kind)) {
+        if (
+          !(
+            args.submission_id &&
+            args.headword &&
+            args.translation &&
+            args.sentence_position
+          )
+        ) {
+          return errorResult(
+            new Error(
+              "card.v1 kinds require 'submission_id', 'headword', " +
+                "'translation' and 'sentence_position'.",
+            ),
+          );
+        }
+        if (CARD_V1_BLUR_KINDS.has(args.kind) && !args.focus_span) {
+          return errorResult(
+            new Error(
+              `add_card kind=${args.kind} requires 'focus_span' (the hidden ` +
+                "answer, copied VERBATIM from the sentence).",
+            ),
+          );
+        }
+        if (
+          args.kind === "contrast" &&
+          !(
+            args.options &&
+            args.options.length >= 2 &&
+            args.correct &&
+            args.options.includes(args.correct)
+          )
+        ) {
+          return errorResult(
+            new Error(
+              "add_card kind=contrast requires 2-3 'options' and 'correct' " +
+                "∈ options.",
+            ),
+          );
+        }
+        return runJson(() =>
+          client.addCard({
+            format: "card.v1",
+            deck_id: args.deck_id,
+            submission_id: args.submission_id,
+            kind: args.kind,
+            headword: args.headword,
+            translation: args.translation,
+            note: args.note,
+            hint: args.hint,
+            cefr: args.cefr,
+            example: {
+              sentence_position: args.sentence_position,
+              focus_span: args.focus_span,
+            },
+            context_positions: args.context_positions,
+            options: args.options,
+            correct: args.correct,
+            question: args.question,
+            direction: args.direction,
+          }),
+        );
+      }
       if (args.kind === "vocab" && !args.lemma) {
         return errorResult(new Error("add_card kind=vocab requires 'lemma'."));
       }

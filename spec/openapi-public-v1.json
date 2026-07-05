@@ -1116,13 +1116,21 @@
           "public-v1"
         ],
         "summary": "Add Card",
-        "description": "Add a card to the learner's study deck. The new card enters review as\n'new'; existing cards are left untouched. 409 when an identical card already\nexists.\n\n**Requires scope:** `cards:write`",
+        "description": "Add a card to the learner's study deck. The new card enters review as\n'new'; existing cards are left untouched. 409 when an identical card already\nexists (legacy bodies). Bodies with ``format: \"card.v1\"`` take the\ndeclarative card.v1 path: verified transcript anchors, server-derived\nhighlight/blur and native-audio clip, idempotent upsert, and a\n``problems`` list reporting anything that was degraded.\n\n**Requires scope:** `cards:write`",
         "operationId": "add_card_api_v1_cards_post",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/AddCardRequest"
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/CardV1Request"
+                  },
+                  {
+                    "$ref": "#/components/schemas/AddCardRequest"
+                  }
+                ],
+                "title": "Body"
               }
             }
           },
@@ -1229,7 +1237,7 @@
           "public-v1"
         ],
         "summary": "Export Deck",
-        "description": "Trigger an Anki (.apkg) export of the deck. Running it costs nothing (no\nLLM). Returns immediately as 'ready' when a fresh .apkg is already cached,\notherwise 'queued'. Re-requesting while a job is already in flight returns\n'queued' without starting a second job. Poll the status route for the URL.\n\n**Requires scope:** `decks:export`",
+        "description": "Trigger an Anki (.apkg) export of the deck. Free to run; it reuses the\ndeck's existing enrichment (no new processing). Returns immediately as\n'ready' when a fresh .apkg is already cached, otherwise 'queued'.\nRe-requesting while a job is already in flight returns 'queued' without\nstarting a second job. Poll the status route for the URL.\n\n**Requires scope:** `decks:export`",
         "operationId": "export_deck_api_v1_decks__deck_id__export_post",
         "parameters": [
           {
@@ -1274,7 +1282,7 @@
             }
           },
           "503": {
-            "description": "Audio clipping is unavailable on this server",
+            "description": "The export could not be queued on this server",
             "content": {
               "application/json": {
                 "schema": {
@@ -1991,6 +1999,69 @@
         "title": "AudioUrlV1",
         "description": "A short-lived direct URL to the native audio (supports HTTP Range)."
       },
+      "CardExampleV1": {
+        "properties": {
+          "sentence_position": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Sentence Position",
+            "description": "1-based transcript position (see GET /transcript) of the example sentence the card anchors to."
+          },
+          "focus_span": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 150,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Focus Span",
+            "description": "VERBATIM substring of that sentence (the exact surface form, not the dictionary form: 'habe', not 'haben'). Drives the highlight/blur painting and, when word timings exist, the native audio clip of just this span. REQUIRED for grammar/cloze/collocation/contrast/production (it is the hidden answer); optional for the lexical kinds and qa."
+          }
+        },
+        "type": "object",
+        "required": [
+          "sentence_position"
+        ],
+        "title": "CardExampleV1",
+        "description": "The transcript anchor for a card.v1 card. The sentence supplies the\nexample text, its translation, and its native audio; the focus span locates\nthe target inside it."
+      },
+      "CardProblemV1": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code",
+            "description": "Stable machine-readable code (e.g. focus_span_no_timings, context_position_unknown, direction_ignored)"
+          },
+          "field": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Field",
+            "description": "Offending request field"
+          },
+          "detail": {
+            "type": "string",
+            "title": "Detail",
+            "description": "What happened and how to fix it"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "detail"
+        ],
+        "title": "CardProblemV1",
+        "description": "One non-fatal issue the server auto-corrected or degraded while saving a\ncard.v1 card. Returned so a generating agent can fix its input and resend."
+      },
       "CardResultV1": {
         "properties": {
           "deck_id": {
@@ -2001,7 +2072,7 @@
           "card_id": {
             "type": "integer",
             "title": "Card Id",
-            "description": "New deck-card id"
+            "description": "New deck-card id (forward card)"
           },
           "card_type": {
             "type": "string",
@@ -2012,6 +2083,48 @@
             "type": "string",
             "title": "State",
             "description": "FSRS state (always 'new' for a fresh card)"
+          },
+          "card_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "integer"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Card Ids",
+            "description": "All created/updated card ids (forward first, then the reverse twin when one exists). card.v1 only."
+          },
+          "created": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created",
+            "description": "False when an existing card with the same (deck, headword) was updated in place, preserving its review history. card.v1 only."
+          },
+          "problems": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/CardProblemV1"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Problems",
+            "description": "Non-fatal issues auto-corrected while saving (card.v1 only); fix and resend to clear them."
           }
         },
         "type": "object",
@@ -2022,7 +2135,188 @@
           "state"
         ],
         "title": "CardResultV1",
-        "description": "The card created by POST /cards."
+        "description": "The card(s) created by POST /cards."
+      },
+      "CardV1Request": {
+        "properties": {
+          "format": {
+            "type": "string",
+            "const": "card.v1",
+            "title": "Format",
+            "description": "Fixed discriminator; omit the field to use the legacy vocab/custom body instead."
+          },
+          "deck_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deck Id",
+            "description": "Target deck id (see GET /decks); omit to use the deck for the card's submission. When given, it must belong to that submission."
+          },
+          "submission_id": {
+            "type": "string",
+            "title": "Submission Id",
+            "description": "The source submission the card anchors to. The card is deleted if that submission is later deleted."
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "word",
+              "phrase",
+              "collocation",
+              "idiom",
+              "chunk",
+              "grammar",
+              "cloze",
+              "contrast",
+              "qa",
+              "production"
+            ],
+            "title": "Kind",
+            "description": "Card kind; see the model description."
+          },
+          "headword": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Headword",
+            "description": "Citation form shown on the card (include the article for gendered nouns: 'die Landschaft'). For qa this is the question."
+          },
+          "translation": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Translation",
+            "description": "Learner-language gloss (lexical kinds), the answer (qa), or the meaning prompt (production)."
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 300
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note",
+            "description": "One-line 'why' shown on the back note rail."
+          },
+          "hint": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 160
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hint",
+            "description": "Optional on-demand hint (stored; surfaced by clients that support hint reveal)."
+          },
+          "cefr": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "A1",
+                  "A2",
+                  "B1",
+                  "B2",
+                  "C1",
+                  "C2"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cefr",
+            "description": "Optional CEFR level tag (stored in card_meta)."
+          },
+          "example": {
+            "$ref": "#/components/schemas/CardExampleV1",
+            "description": "Transcript anchor (required)."
+          },
+          "context_positions": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "maxItems": 4,
+            "title": "Context Positions",
+            "description": "Optional neighbouring sentence positions shown as framing context (1-based). Unknown positions are dropped and reported as problems."
+          },
+          "options": {
+            "items": {
+              "type": "string",
+              "maxLength": 80,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 3,
+            "title": "Options",
+            "description": "Contrast only: the confusable choices (2-3)."
+          },
+          "correct": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 80
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Correct",
+            "description": "Contrast only: the right option; must be one of options."
+          },
+          "question": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Question",
+            "description": "qa only: overrides headword as the displayed question."
+          },
+          "direction": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "both",
+                  "forward"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Direction",
+            "description": "Lexical kinds only: 'both' (default, forward + reverse pair) or 'forward'. Study kinds are always forward-only."
+          }
+        },
+        "type": "object",
+        "required": [
+          "format",
+          "submission_id",
+          "kind",
+          "headword",
+          "translation",
+          "example"
+        ],
+        "title": "CardV1Request",
+        "description": "Create a fully-featured card from declarative anchors (format card.v1).\n\nThe caller supplies WHAT to teach (kind, headword, translation, note) and\nWHERE it lives in the recording (sentence position + verbatim focus span);\nthe server derives everything that makes native cards look good: the\nper-word highlight/blur map, the native-audio clip of the focus span, and\nthe forward+reverse pair for lexical kinds. Anchors are verified against\nthe stored transcript - a paraphrased example is rejected, never saved.\n\nKinds: word | phrase | collocation | idiom | chunk (lexical; forward +\nreverse pair, the headword is shown as a vocab-style entry) and grammar |\ncloze | contrast | qa | production (study kinds; forward-only, rendered\nwith a type chip and per-kind chrome). For grammar-family kinds the focus\nspan is the answer and is blurred in the example."
       },
       "CollectionRefV1": {
         "properties": {

@@ -446,6 +446,77 @@ describe("write tools", () => {
     });
   });
 
+  it("add_card card.v1 kind maps fields into a format=card.v1 body", async () => {
+    mockFetch(
+      jsonResponse(
+        {
+          deck_id: 1,
+          card_id: 10,
+          card_type: "expression",
+          state: "new",
+          card_ids: [10],
+          created: true,
+          problems: [],
+        },
+        201,
+      ),
+    );
+    await call("add_card", {
+      kind: "grammar",
+      submission_id: "s1",
+      headword: "einem",
+      translation: "dative after 'in' (location)",
+      note: "in + Dativ for location",
+      hint: "dative",
+      sentence_position: 2,
+      focus_span: "einem",
+    });
+    expect(lastUrl).toBe("https://api.test/api/v1/cards");
+    expect(JSON.parse(String(lastInit.body))).toEqual({
+      format: "card.v1",
+      kind: "grammar",
+      submission_id: "s1",
+      headword: "einem",
+      translation: "dative after 'in' (location)",
+      note: "in + Dativ for location",
+      hint: "dative",
+      example: { sentence_position: 2, focus_span: "einem" },
+    });
+  });
+
+  it("add_card blur kind without focus_span errors client-side", async () => {
+    const spy = vi.fn();
+    vi.stubGlobal("fetch", spy);
+    const result = await call("add_card", {
+      kind: "cloze",
+      submission_id: "s1",
+      headword: "sehen",
+      translation: "to see",
+      sentence_position: 1,
+    });
+    expect(result.isError).toBe(true);
+    expect(textOf(result)).toContain("focus_span");
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it("add_card contrast requires correct within options client-side", async () => {
+    const spy = vi.fn();
+    vi.stubGlobal("fetch", spy);
+    const result = await call("add_card", {
+      kind: "contrast",
+      submission_id: "s1",
+      headword: "wissen",
+      translation: "to know a fact",
+      sentence_position: 1,
+      focus_span: "weiß",
+      options: ["wissen", "kennen"],
+      correct: "sehen",
+    });
+    expect(result.isError).toBe(true);
+    expect(textOf(result)).toContain("correct");
+    expect(spy).not.toHaveBeenCalled();
+  });
+
   it("add_card kind=custom without back/submission_id errors client-side", async () => {
     const spy = vi.fn();
     vi.stubGlobal("fetch", spy);
