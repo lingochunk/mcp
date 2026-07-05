@@ -87,7 +87,10 @@ the user to add the LingoChunk MCP server (see the plugin README) and stop.
       (`can_do`) and `new_lemmas` (the words worth adding to the deck; the
       app offers them, excluding ones the user already holds).
 
-5. **Save.** `save_lesson` with `{document}`. On 400, read the code:
+5. **Save.** `save_lesson` with `{document}`. Set
+   `generator: {skill: "lingochunk-lesson"}` so the app's lessons list shows
+   which skill built it (episodes collect lessons from several skills).
+   On 400, read the code:
    `unknown_positions` / `position_outside_slice` mean a sentence reference
    is wrong; `dialogue_mismatch` means quote the transcript verbatim
    (including punctuation). Fix and retry. The response's `unknown_lemmas`
@@ -105,7 +108,8 @@ the user to add the LingoChunk MCP server (see the plugin README) and stop.
 
 Top level: `{format:"lesson.v1", title, subtitle?, language,
 translation_language, level?, source:{submission_id, from_time?, to_time?,
-episode_title?}, objectives?[<=5], estimated_minutes?, blocks[<=40]}`.
+episode_title?}, generator?:{skill, version?}, objectives?[<=5],
+estimated_minutes?, blocks[<=40]}`.
 
 Blocks (`type` field): `section {title, subtitle?}` · `prose {text,
 style:"instruction"|"body"}` · `audio_slice {audio:{start,end}, label?}` ·

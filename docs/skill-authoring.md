@@ -80,6 +80,15 @@ vocabulary does not know - they keep working but lose their Words-tab
 crosslink, so prefer the lemma form the episode uses and re-save if any
 look wrong.
 
+### Stamp your skill
+
+Set `generator: {skill: "<your-skill-name>"}` at the document's top level
+(version optional). The app shows the slug in the episode's lessons list, so
+learners can tell which skill built which lesson once several accumulate.
+It is self-declared display metadata (the slug is schema-locked to a
+lowercase ASCII slug, max 80 chars); it grants nothing and must not be
+relied on for anything but display.
+
 ### Documents are immutable
 
 Every `save_lesson` creates a NEW lesson; there is no update. That is a

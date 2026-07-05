@@ -3296,6 +3296,18 @@
             "title": "Estimated Minutes",
             "description": "Estimated study time in minutes, when known"
           },
+          "generator_skill": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Generator Skill",
+            "description": "Self-declared slug of the skill that composed the lesson (from the document's 'generator' field; display metadata, lesson.v1 only)"
+          },
           "size_bytes": {
             "type": "integer",
             "title": "Size Bytes",
@@ -3418,6 +3430,16 @@
           "source": {
             "$ref": "#/components/schemas/LessonSource"
           },
+          "generator": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LessonGenerator"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "objectives": {
             "items": {
               "type": "string",
@@ -3513,6 +3535,34 @@
         ],
         "title": "LessonDocumentV1",
         "description": "The complete lesson.v1 document."
+      },
+      "LessonGenerator": {
+        "properties": {
+          "skill": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9._-]{0,79}$",
+            "title": "Skill"
+          },
+          "version": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,31}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "skill"
+        ],
+        "title": "LessonGenerator",
+        "description": "Which skill composed the document (self-declared provenance).\n\nDisplay metadata only, never a trust boundary: any caller can claim any\nslug, so nothing may authorise or branch on it. Both fields are locked to\na display-safe ASCII slug charset (no spaces, no control or bidi\ncharacters) so the UI and export can render them verbatim."
       },
       "LessonListV1": {
         "properties": {
@@ -3657,6 +3707,18 @@
             ],
             "title": "Estimated Minutes",
             "description": "Estimated study time in minutes, when known"
+          },
+          "generator_skill": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Generator Skill",
+            "description": "Self-declared slug of the skill that composed the lesson (from the document's 'generator' field; display metadata, lesson.v1 only)"
           },
           "size_bytes": {
             "type": "integer",

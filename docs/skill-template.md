@@ -48,7 +48,8 @@ the user to add the LingoChunk MCP server (see the plugin README) and stop.
    `lookup_word`; never invent them.
 3. YOUR COMPOSITION STEPS: which blocks, in which order, and why. Spell out
    the spine so the agent never improvises structure.
-4. **Save.** `save_lesson` with `{document}`. On 400 read the code:
+4. **Save.** `save_lesson` with `{document}`, stamping
+   `generator: {skill: "lingochunk-YOURNAME"}`. On 400 read the code:
    `unknown_positions` / `position_outside_slice` mean a sentence reference
    is wrong; `dialogue_mismatch` means quote the transcript verbatim. Fix
    and retry. Check the response's `unknown_lemmas`.
