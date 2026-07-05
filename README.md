@@ -30,13 +30,14 @@ the last four (phase 3) write to your account.
 | `list_decks` | `cards:write` or `decks:export` | Your study decks with card counts, for picking a `deck_id` to add to or export. |
 | `add_card` | `cards:write` | Adds a card to your review queue (FSRS, starts new): `kind=vocab` from your vocabulary, or `kind=custom` front/back. Omit `deck_id` to use the deck for the card's own submission. |
 | `export_anki_deck` | `decks:export` | Exports a deck to Anki `.apkg` (no LLM), polling internally; returns a download URL when ready. A deck with no linked episode can't be exported. |
-| `save_lesson` | `lessons:write` | Saves a self-contained HTML lesson to your private library (10 MB cap, 100 max); returns metadata + a short-lived view URL. |
+| `save_lesson` | `lessons:write` | Saves a lesson to your private library (100 max). Preferred: a structured `lesson.v1` document the app renders natively (Lessons tab on the episode, real audio, live word state, Ask AI); returns metadata + an `app_url`. Legacy: a self-contained HTML file (10 MB cap) opened via a short-lived view URL. |
 
 Plus two skills:
 
-- **`lingochunk-lesson`** - builds a single self-contained HTML lesson (data-URI
-  audio; gap-fill, multiple-choice, listening and blur-reveal exercises) from the
-  tools above, filtering out words you already know.
+- **`lingochunk-lesson`** - composes a coursebook-style `lesson.v1` document
+  (listen, text, vocabulary, one grammar point, graded exercises, review)
+  from the tools above, filtering out words you already know; the app
+  renders it natively and can export an offline HTML worksheet.
 - **`lingochunk-discuss`** - a lighter, conversational "talk me through this
   episode" workflow.
 

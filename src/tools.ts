@@ -557,23 +557,47 @@ export function registerTools(
     {
       title: "Save a lesson",
       description:
-        "Save a single self-contained HTML lesson to the user's private " +
-        "LingoChunk library (10 MB max, up to 100 lessons, private by default). " +
-        "Returns the lesson metadata plus a short-lived view URL to open it now; " +
-        "its durable home is the app's library, where it opens on any device. Use " +
-        "this to keep a lesson the lingochunk-lesson skill produced. Requires the " +
-        "lessons:write scope.",
+        "Save a lesson to the user's private LingoChunk library (up to 100 " +
+        "lessons, private by default). PREFERRED: pass `document`, a " +
+        "structured lesson.v1 JSON document (see the lingochunk-lesson " +
+        "skill) - the app renders it natively in a Lessons tab on the source " +
+        "episode, with real audio playback, live vocabulary state, links " +
+        "into the Words/Listen tabs and a built-in Ask AI tutor; the " +
+        "response's app_url is where it opens, and unknown_lemmas lists any " +
+        "glossary lemmas the episode does not know (fix and re-save to " +
+        "restore their crosslinks). The server validates the document " +
+        "against the source episode and rejects misquoted or out-of-range " +
+        "sentence references (400 with a stable code). LEGACY: pass `html` " +
+        "(a complete self-contained HTML file, 10 MB max, title + language " +
+        "required) to store an opaque artefact opened via a short-lived " +
+        "view URL. Exactly one of document/html. Requires the lessons:write " +
+        "scope.",
       inputSchema: {
-        title: z.string().min(1).max(255).describe("Lesson title."),
+        title: z
+          .string()
+          .min(1)
+          .max(255)
+          .optional()
+          .describe("Lesson title (required with html; ignored with document)."),
         language: z
           .string()
           .min(1)
           .max(10)
-          .describe("Target language, ISO 639-1."),
+          .optional()
+          .describe("Target language, ISO 639-1 (required with html)."),
         html: z
           .string()
           .min(1)
-          .describe("The complete self-contained HTML document."),
+          .optional()
+          .describe("LEGACY: the complete self-contained HTML document."),
+        document: z
+          .record(z.unknown())
+          .optional()
+          .describe(
+            "A lesson.v1 document (format:'lesson.v1'). The server is the " +
+              "validator of record; on 400/422 read the error detail, fix " +
+              "the document and retry.",
+          ),
         source_submission_ids: z
           .array(z.string())
           .optional()
