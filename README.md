@@ -16,8 +16,9 @@ contributions (see [CONTRIBUTING.md](CONTRIBUTING.md)).
 
 ## What it gives an agent
 
-Twenty-four tools, each wrapping one public endpoint. Twelve read from your
-account; twelve write to it.
+Twenty-five tools. Twelve read from your account; twelve write to it; one
+(`get_authoring_guide`) serves the authoring craft guides so remote clients
+that never see the skills still compose good lessons, cards and annotations.
 
 | Tool | Scope | What it does |
 |---|---|---|
@@ -28,6 +29,7 @@ account; twelve write to it.
 | `get_audio_url` | `content:read` | A short-lived presigned URL to the full native audio (Range-capable). |
 | `search_examples` | `content:read` | Example sentences across your library, by word (`lemma`) or text (`q`). A capped sample, not exhaustive. |
 | `get_audio_clip` | `content:read` | Cuts a short native-audio snippet, **saves it to a local file**, and returns `{path, media_type, size_bytes}` for embedding in lessons. |
+| `get_authoring_guide` | none | Returns the full craft guide for `topic` (`lesson`, `cards`, `annotations`, `add-language`, `discuss`) - the same content as the bundled skills, embedded in the package so remote clients get it too. Call it before composing. |
 | `list_decks` | `cards:write` or `decks:export` | Your study decks with card counts, for picking a `deck_id` to add to or export. |
 | `add_card` | `cards:write` | Adds a card to your review queue (FSRS, starts new). Preferred: the `card.v1` kinds (`word`, `phrase`, `collocation`, `idiom`, `chunk`, `grammar`, `cloze`, `contrast`, `qa`, `production`) anchored to a verbatim transcript sentence - the server derives the highlight/blur painting and native-audio clip, so the card matches the app's own. Legacy: `kind=vocab` from your vocabulary, or `kind=custom` front/back. Omit `deck_id` to use the deck for the card's own submission. |
 | `export_anki_deck` | `decks:export` | Exports a deck to Anki `.apkg` (no LLM), polling internally; returns a download URL when ready. A deck with no linked episode can't be exported. |
@@ -68,6 +70,12 @@ Plus five skills:
   culture-bound references) and attaches a short markdown creator note to each
   exact span: an iris tint + note sheet for you, a forward-only note card for
   your followers.
+
+The Claude Code plugin installs these as skills. Every client also gets the
+same guidance two other ways that need no plugin: as MCP **prompts** (one per
+skill, named `lingochunk-lesson`, `lingochunk-cards`, ...) in the client's
+prompt/slash picker, and via the **`get_authoring_guide`** tool the model can
+call itself before composing.
 
 ## Prerequisites
 

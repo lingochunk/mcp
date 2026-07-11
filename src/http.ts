@@ -9,6 +9,7 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 import type { HttpConfig } from "./config.js";
 import { LingoChunkClient } from "./client.js";
 import { registerTools } from "./tools.js";
+import { registerPrompts } from "./prompts.js";
 
 /** Options for the hosted (Streamable HTTP) server. */
 export interface HttpServerOptions extends HttpConfig {
@@ -207,6 +208,7 @@ async function handle(
   });
   const server = new McpServer({ name: "lingochunk", version: options.version });
   registerTools(server, client, { baseUrl: options.baseUrl, token, clipDir: "" }, "remote");
+  registerPrompts(server);
 
   const transport = new StreamableHTTPServerTransport({
     sessionIdGenerator: undefined,

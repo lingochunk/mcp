@@ -115,7 +115,7 @@ function textOf(result: CallToolResult): string {
 }
 
 describe("tool registration", () => {
-  it("registers all twenty-four tools", () => {
+  it("registers all twenty-five tools", () => {
     expect([...tools.keys()].sort()).toEqual(
       [
         "add_card",
@@ -128,6 +128,7 @@ describe("tool registration", () => {
         "export_anki_deck",
         "get_audio_clip",
         "get_audio_url",
+        "get_authoring_guide",
         "get_lesson",
         "get_transcript",
         "get_translation_source",
@@ -144,6 +145,36 @@ describe("tool registration", () => {
         "update_annotation",
       ].sort(),
     );
+  });
+});
+
+describe("get_authoring_guide", () => {
+  it("returns the lesson guide markdown for topic=lesson", async () => {
+    const result = await call("get_authoring_guide", { topic: "lesson" });
+    expect(result.isError).toBeFalsy();
+    const text = textOf(result);
+    expect(text).toContain("# LingoChunk lesson builder");
+    expect(text.length).toBeGreaterThan(1000);
+    // The YAML frontmatter must be stripped, not served over MCP.
+    expect(text).not.toMatch(/^---\n/);
+    expect(text).not.toContain("name: lingochunk-lesson");
+  });
+
+  it("serves a distinct, non-trivial guide for each of the five topics", async () => {
+    const topics = ["lesson", "cards", "annotations", "add-language", "discuss"];
+    const bodies = new Set<string>();
+    for (const topic of topics) {
+      const text = textOf(await call("get_authoring_guide", { topic }));
+      expect(text.length).toBeGreaterThan(500);
+      bodies.add(text);
+    }
+    expect(bodies.size).toBe(topics.length);
+  });
+
+  it("rejects an unknown topic at the schema (no fetch)", async () => {
+    await expect(
+      call("get_authoring_guide", { topic: "nope" }),
+    ).rejects.toThrow();
   });
 });
 

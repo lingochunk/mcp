@@ -5,6 +5,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { ApiError, type LingoChunkClient, type QueryValue } from "./client.js";
 import type { Config } from "./config.js";
+import { GUIDES, GUIDE_TOPICS, type GuideTopic } from "./generated/guides.js";
 
 /** card.v1 kinds (POST /cards with format=card.v1). Mirrors the server's
  *  CardKindV1 / CARD_V1_BLUR_KINDS in lingochunk_shared.models.public_v1. */
@@ -498,6 +499,37 @@ export function registerTools(
     },
   );
 
+  server.registerTool(
+    "get_authoring_guide",
+    {
+      title: "Get an authoring guide",
+      description:
+        "Fetch the craft guide for a LingoChunk authoring task, so your output " +
+        "matches the app's own quality instead of rendering flat. CALL THIS " +
+        "FIRST - before you compose - the first time in a conversation you " +
+        "build any of: a lesson (topic 'lesson', before save_lesson), " +
+        "flashcards ('cards', before add_card), creator notes ('annotations', " +
+        "before create_annotation), a translation / added language " +
+        "('add-language', before add_language or the draft flow), or a guided " +
+        "discussion ('discuss'). Returns the guide markdown: anchoring rules, " +
+        "the block/kind menu, and worked recipes. Read-only; needs no scope.",
+      inputSchema: {
+        topic: z
+          .enum(GUIDE_TOPICS as unknown as [GuideTopic, ...GuideTopic[]])
+          .describe(
+            "Which authoring task: 'lesson' (lesson.v1 documents), 'cards' " +
+              "(card.v1 flashcards), 'annotations' (creator notes), " +
+              "'add-language' (translations / leveled same-language decks) or " +
+              "'discuss' (guided episode discussion).",
+          ),
+      },
+    },
+    ({ topic }) =>
+      Promise.resolve({
+        content: [{ type: "text" as const, text: GUIDES[topic].body }],
+      }),
+  );
+
   // Remote mode never registers this tool: it saves to the *server's* disk,
   // which the remote caller cannot read, and unmetered writes on a shared
   // host would be an abuse vector besides.
@@ -585,8 +617,9 @@ export function registerTools(
         "Responses carry a problems[] list of degradations (e.g. " +
         "focus_span_no_timings) - fix and resend to clear them; resending the " +
         "same headword updates the card in place (created=false), preserving " +
-        "review history. Read the lingochunk-cards skill for per-kind guidance " +
-        "and quality rules before batch-creating cards. LEGACY kinds still " +
+        "review history. Before composing cards, call get_authoring_guide with " +
+        "topic='cards' (once per conversation) for per-kind guidance and " +
+        "quality rules. LEGACY kinds still " +
         "work: kind=vocab adds a word ALREADY in the user's vocabulary by " +
         "lemma (409 code=ambiguous_lemma: pass submission_id or pos); " +
         "kind=custom is a flat front/back card (409 code=duplicate_card is " +
@@ -853,9 +886,11 @@ export function registerTools(
       title: "Save a lesson",
       description:
         "Save a lesson to the user's private LingoChunk library (up to 100 " +
-        "lessons, private by default). PREFERRED: pass `document`, a " +
-        "structured lesson.v1 JSON document (see the lingochunk-lesson " +
-        "skill) - the app renders it natively in a Lessons tab on the source " +
+        "lessons, private by default). Before composing a lesson, call " +
+        "get_authoring_guide with topic='lesson' (once per conversation) for " +
+        "the scaffold, anchoring rules and recipes. PREFERRED: pass `document`, " +
+        "a structured lesson.v1 JSON document - the app renders it natively in " +
+        "a Lessons tab on the source " +
         "episode, with real audio playback, live vocabulary state, links " +
         "into the Words/Listen tabs and a built-in Ask AI tutor; the " +
         "response's app_url is where it opens, and unknown_lemmas lists any " +
@@ -1049,8 +1084,9 @@ export function registerTools(
         "same length as 'tokens'; render the sense the 'pivot_meaning' fixes " +
         "(do not re-interpret the word); PUNCT and INTJ tokens map to \"\"; " +
         "proper nouns stay as the name; never copy the pivot or source word " +
-        "verbatim as its meaning. Read the lingochunk-add-language skill for " +
-        "the full per-level rules (ordinary target vs leveled same-language). " +
+        "verbatim as its meaning. Before drafting, call get_authoring_guide " +
+        "with topic='add-language' (once per conversation) for the full " +
+        "per-level rules (ordinary target vs leveled same-language). " +
         "Page with 'from_position' (0-based) until 'next_from_position' is " +
         "null. Only the READY primary of a group is a valid source. Requires " +
         "the content:read scope.",
@@ -1255,8 +1291,9 @@ export function registerTools(
         "span's audio times from the transcript, so the note sheet's Play and " +
         "the card clip work without them. The episode has a cap (see " +
         "list_annotations' max_annotations). " +
-        "Read the lingochunk-annotate skill for what is worth annotating and the " +
-        "note format. Requires the annotations:write scope.",
+        "Before annotating, call get_authoring_guide with topic='annotations' " +
+        "(once per conversation) for what is worth a note and the note format. " +
+        "Requires the annotations:write scope.",
       inputSchema: {
         submission_id: z.string().min(1).describe("The submission id."),
         sentence_id: z

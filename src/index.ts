@@ -6,6 +6,7 @@ import { loadConfig, loadHttpConfig } from "./config.js";
 import { LingoChunkClient } from "./client.js";
 import { startHttpServer } from "./http.js";
 import { registerTools } from "./tools.js";
+import { registerPrompts } from "./prompts.js";
 
 // Single source of truth for the version: the package manifest. A hardcoded
 // copy here once drifted (the server reported 0.2.1 while npm shipped 0.3.0),
@@ -44,6 +45,7 @@ async function main(): Promise<void> {
 
   const server = new McpServer({ name: "lingochunk", version: VERSION });
   registerTools(server, client, config);
+  registerPrompts(server);
 
   const transport = new StdioServerTransport();
   await server.connect(transport);

@@ -15,7 +15,8 @@
     "node": ">=18"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "npm run generate && tsc",
+    "generate": "node --experimental-strip-types scripts/generate-guides.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "start": "node dist/index.js",

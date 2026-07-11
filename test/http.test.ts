@@ -113,6 +113,67 @@ describe("hosted HTTP server", () => {
     }
   });
 
+  it("advertises the prompts capability and lists all five authoring prompts", async () => {
+    const client = await mcpClient("lcp_alpha");
+    try {
+      // The capability must be in the initialize result, or OAuth clients
+      // (claude.ai) never surface the prompts at all.
+      expect(client.getServerCapabilities()?.prompts).toBeDefined();
+      const { prompts } = await client.listPrompts();
+      const names = prompts.map((p) => p.name).sort();
+      expect(names).toEqual(
+        [
+          "lingochunk-add-language",
+          "lingochunk-annotate",
+          "lingochunk-cards",
+          "lingochunk-discuss",
+          "lingochunk-lesson",
+        ].sort(),
+      );
+      // Descriptions come from the skill frontmatter, not empty.
+      for (const p of prompts) {
+        expect((p.description ?? "").length).toBeGreaterThan(40);
+      }
+    } finally {
+      await client.close();
+    }
+  });
+
+  it("serves a prompt's markdown as a user-role message", async () => {
+    const client = await mcpClient("lcp_alpha");
+    try {
+      const result = await client.getPrompt({ name: "lingochunk-lesson" });
+      expect(result.messages).toHaveLength(1);
+      const [message] = result.messages;
+      expect(message!.role).toBe("user");
+      expect(message!.content.type).toBe("text");
+      const text = (message!.content as { type: "text"; text: string }).text;
+      expect(text).toContain("# LingoChunk lesson builder");
+      expect(text).not.toContain("name: lingochunk-lesson");
+    } finally {
+      await client.close();
+    }
+  });
+
+  it("exposes get_authoring_guide as a remote tool", async () => {
+    const client = await mcpClient("lcp_alpha");
+    try {
+      const { tools } = await client.listTools();
+      expect(tools.map((t) => t.name)).toContain("get_authoring_guide");
+      const result = await client.callTool({
+        name: "get_authoring_guide",
+        arguments: { topic: "cards" },
+      });
+      const text = (result.content as { type: string; text: string }[])
+        .map((c) => c.text)
+        .join("");
+      expect(text).toContain("card");
+      expect(text.length).toBeGreaterThan(500);
+    } finally {
+      await client.close();
+    }
+  });
+
   it("forwards each caller's own token to the API, per request", async () => {
     const alpha = await mcpClient("lcp_alpha");
     try {

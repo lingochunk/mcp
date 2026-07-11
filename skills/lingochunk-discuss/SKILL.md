@@ -35,8 +35,10 @@ the LingoChunk MCP server (see the plugin README) and stop.
      and mention whether the user is already learning it (from `get_vocabulary`)
      rather than guessing. Prioritise `learning`/`new` words; do not dwell on
      words `get_vocabulary(status=known)` shows they have mastered.
-   - Offer to play a bit: `get_audio_url` for streaming the passage, or
-     `get_audio_clip` to save a short snippet the user can listen to.
+   - Offer to play a bit: `get_audio_url` streams the passage (always
+     available). On a local/plugin setup only, `get_audio_clip` can save a
+     short snippet to disk - skip it if the tool is not offered (remote
+     clients do not have it).
 
 4. **Follow the learner.** Answer their questions, look up more words on demand,
    pull related examples with `search_examples(lemma=...)` when they ask "where
