@@ -423,6 +423,16 @@ export class LingoChunkClient {
     return this.postJson("/lessons", body);
   }
 
+  listLessons(params: Record<string, QueryValue>): Promise<unknown> {
+    return this.getJson("/lessons", params);
+  }
+
+  /** The stored lesson.v1 document. Owner-scoped server-side; 404 for HTML
+   *  lessons (they have no document) and for foreign/unknown ids. */
+  getLessonDocument(lessonId: string): Promise<unknown> {
+    return this.getJson(`/lessons/${encodeURIComponent(lessonId)}/document`);
+  }
+
   /** Owner-scoped server-side: a foreign or unknown id is a 404, never a leak. */
   deleteLesson(lessonId: string): Promise<void> {
     return this.deleteNoContent(`/lessons/${encodeURIComponent(lessonId)}`);

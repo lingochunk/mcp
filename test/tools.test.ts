@@ -115,7 +115,7 @@ function textOf(result: CallToolResult): string {
 }
 
 describe("tool registration", () => {
-  it("registers all twenty-two tools", () => {
+  it("registers all twenty-four tools", () => {
     expect([...tools.keys()].sort()).toEqual(
       [
         "add_card",
@@ -128,12 +128,14 @@ describe("tool registration", () => {
         "export_anki_deck",
         "get_audio_clip",
         "get_audio_url",
+        "get_lesson",
         "get_transcript",
         "get_translation_source",
         "get_vocabulary",
         "list_annotations",
         "list_decks",
         "list_languages",
+        "list_lessons",
         "list_library",
         "lookup_word",
         "put_language_translations",
@@ -673,6 +675,33 @@ describe("write tools", () => {
       language: "de",
       html: "<h1></h1>",
     });
+  });
+
+  it("list_lessons GETs /lessons with the paging params", async () => {
+    mockFetch(jsonResponse({ lessons: [], next_cursor: null }));
+    const result = await call("list_lessons", { limit: 2, cursor: "abc" });
+    expect(lastUrl).toContain("https://api.test/api/v1/lessons?");
+    expect(lastUrl).toContain("limit=2");
+    expect(lastUrl).toContain("cursor=abc");
+    expect(JSON.parse(textOf(result))).toEqual({ lessons: [], next_cursor: null });
+  });
+
+  it("get_lesson GETs the document by id (URL-encoded)", async () => {
+    mockFetch(jsonResponse({ format: "lesson.v1", title: "T", blocks: [] }));
+    const result = await call("get_lesson", { lesson_id: "l1/../x" });
+    expect(lastUrl).toBe("https://api.test/api/v1/lessons/l1%2F..%2Fx/document");
+    expect(JSON.parse(textOf(result))).toEqual({
+      format: "lesson.v1",
+      title: "T",
+      blocks: [],
+    });
+  });
+
+  it("get_lesson surfaces the 404 for an HTML lesson (no document)", async () => {
+    mockFetch(jsonResponse({ detail: "Lesson has no document" }, 404));
+    const result = await call("get_lesson", { lesson_id: "html-one" });
+    expect(textOf(result)).toContain("404");
+    expect(textOf(result)).toContain("Lesson has no document");
   });
 
   it("delete_lesson DELETEs by id (URL-encoded) and reports the deletion", async () => {

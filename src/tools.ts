@@ -903,6 +903,49 @@ export function registerTools(
   );
 
   server.registerTool(
+    "list_lessons",
+    {
+      title: "List lessons",
+      description:
+        "List the user's saved lessons, newest first: id, title, language, " +
+        "format (lesson.v1 or html), source submission and created_at. " +
+        "Cursor-paginated. Use it to find a lesson id for get_lesson / " +
+        "delete_lesson, or to see what already exists before saving another. " +
+        "Requires the lessons:write scope.",
+      inputSchema: {
+        limit: z.number().int().min(1).max(200).optional(),
+        cursor: z
+          .string()
+          .optional()
+          .describe("Opaque cursor from a previous page's next_cursor."),
+      },
+    },
+    async (args) => runJson(() => client.listLessons(params(args))),
+  );
+
+  server.registerTool(
+    "get_lesson",
+    {
+      title: "Get a lesson document",
+      description:
+        "Read back a saved lesson.v1 document by id (ids from list_lessons " +
+        "or save_lesson's response). This closes the revision loop: lessons " +
+        "are immutable, so to revise one, get_lesson -> edit the document -> " +
+        "save_lesson (a NEW id) -> delete_lesson the superseded one. 404 for " +
+        "legacy HTML lessons - they have no document. Requires the " +
+        "lessons:write scope.",
+      inputSchema: {
+        lesson_id: z
+          .string()
+          .min(1)
+          .max(36)
+          .describe("The lesson to read (id from list_lessons/save_lesson)."),
+      },
+    },
+    async ({ lesson_id }) => runJson(() => client.getLessonDocument(lesson_id)),
+  );
+
+  server.registerTool(
     "delete_lesson",
     {
       title: "Delete a lesson",

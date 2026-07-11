@@ -1667,6 +1667,100 @@
         ]
       }
     },
+    "/api/v1/lessons/{lesson_id}/document": {
+      "get": {
+        "tags": [
+          "public-v1"
+        ],
+        "summary": "Get Lesson Document Route",
+        "description": "Read back a native lesson.v1 document (owner only; 404 for HTML\nlessons, which have no document). Closes the loop for agents: lesson rows\nare immutable, so revising one = read the document, save the revision as\na new lesson, delete the old one. Without this route an agent could save\nand list lessons but never see what it (or an earlier session) wrote.\n\n**Requires scope:** `lessons:write`",
+        "operationId": "get_lesson_document_route_api_v1_lessons__lesson_id__document_get",
+        "parameters": [
+          {
+            "name": "lesson_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Lesson Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LessonDocumentV1"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found or not accessible",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorV1"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid API token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorV1"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The token lacks the scope this endpoint requires",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorV1"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded. The `Retry-After` response header gives the number of seconds to wait.",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds to wait before retrying",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorV1"
+                }
+              }
+            }
+          }
+        },
+        "x-required-scopes": [
+          "lessons:write"
+        ]
+      }
+    },
     "/api/v1/lessons/{lesson_id}/view-url": {
       "get": {
         "tags": [
