@@ -412,8 +412,11 @@ export function registerTools(
         "Fetch a submission's transcript: timestamped sentences with " +
         "translations. Sliceable by sentence-position range (from_sentence/" +
         "to_sentence) or time range in seconds (from_time/to_time) so you can " +
-        "pull an excerpt instead of a whole episode. transcript_state tells you " +
-        "if it is ready, still processing, or unavailable.",
+        "pull an excerpt instead of a whole episode. Each sentence also carries " +
+        "a stable 'sentence_id' and its 'display' string, which the annotation " +
+        "tools use to anchor creator notes (offsets are Unicode code points into " +
+        "'display'). transcript_state tells you if it is ready, still " +
+        "processing, or unavailable.",
       inputSchema: {
         submission_id: z.string().min(1).describe("The submission id."),
         from_sentence: z.number().int().min(1).optional(),
@@ -1140,5 +1143,195 @@ export function registerTools(
     },
     async ({ submission_id, language }) =>
       runJson(() => client.deleteTranslationDraft(submission_id, language)),
+  );
+
+  // --- Creator annotation tools (phase 5) ---------------------------------
+
+  server.registerTool(
+    "list_annotations",
+    {
+      title: "List creator annotations",
+      description:
+        "List the creator annotations already on one of your own episodes. " +
+        "Each is a markdown note anchored to a transcript sentence span (or a " +
+        "whole sentence). Returns 'annotations' (ordered by sentence then " +
+        "char_start; each with its id, sentence_id, char_start/char_end, the " +
+        "server's 'selected_text' snapshot, the 'note' and a 'stale' flag), " +
+        "plus 'count' and 'max_annotations' (the per-episode cap). BUDGET " +
+        "against count vs max_annotations, and read this FIRST so you do not " +
+        "re-annotate an expression that already has a note. 'stale: true' means " +
+        "the sentence was edited after the note was made, so the app hides its " +
+        "tint until it is re-anchored - replace or delete a stale note rather " +
+        "than leaving it. Requires the content:read scope.",
+      inputSchema: {
+        submission_id: z.string().min(1).describe("The submission id."),
+      },
+    },
+    async ({ submission_id }) =>
+      runJson(() => client.listAnnotations(submission_id)),
+  );
+
+  server.registerTool(
+    "create_annotation",
+    {
+      title: "Create a creator annotation",
+      description:
+        "Add ONE creator annotation to your own episode: a markdown note " +
+        "tinted onto a transcript sentence span (owners see the tint + note " +
+        "sheet; followers get a forward-only note card). Anchor it with " +
+        "'sentence_id' (from get_transcript, stable across edits) plus " +
+        "'char_start'/'char_end' - UNICODE CODE-POINT offsets into that " +
+        "sentence's 'display' string (Python string semantics: count code " +
+        "points, so an astral character like an emoji is 1, NOT the 2 that " +
+        "JavaScript's string.length / indexOf would report). Offsets are " +
+        "BOTH-OR-NEITHER: give both for a span, or omit both for a " +
+        "whole-sentence note; char_start must be < char_end. The server " +
+        "snapshots and returns 'selected_text' = display[char_start:char_end] - " +
+        "VERIFY it equals the span you intended; if it does not, your offsets " +
+        "were off (usually a UTF-16 vs code-point miscount), so delete_annotation " +
+        "and create it again with corrected offsets. 'note' is markdown (1-5000 " +
+        "chars), rendered natively in a bottom sheet - keep it to ~4 short " +
+        "lines. Leave start_time/end_time unset (the sheet hides Play without " +
+        "them). The episode has a cap (see list_annotations' max_annotations). " +
+        "Read the lingochunk-annotate skill for what is worth annotating and the " +
+        "note format. Requires the annotations:write scope.",
+      inputSchema: {
+        submission_id: z.string().min(1).describe("The submission id."),
+        sentence_id: z
+          .number()
+          .int()
+          .describe(
+            "The sentence's stable id from get_transcript (NOT its position).",
+          ),
+        char_start: z
+          .number()
+          .int()
+          .min(0)
+          .optional()
+          .describe(
+            "Code-point offset into the sentence's 'display' where the span " +
+              "starts (omit together with char_end for a whole-sentence note).",
+          ),
+        char_end: z
+          .number()
+          .int()
+          .min(0)
+          .optional()
+          .describe(
+            "Code-point offset where the span ends (exclusive); must be > " +
+              "char_start.",
+          ),
+        note: z
+          .string()
+          .min(1)
+          .max(5000)
+          .describe("The markdown note (1-5000 chars; keep it to ~4 short lines)."),
+        start_time: z
+          .number()
+          .min(0)
+          .optional()
+          .describe("Optional audio-span start (s); usually left unset."),
+        end_time: z
+          .number()
+          .min(0)
+          .optional()
+          .describe("Optional audio-span end (s); usually left unset."),
+      },
+    },
+    async ({
+      submission_id,
+      sentence_id,
+      char_start,
+      char_end,
+      note,
+      start_time,
+      end_time,
+    }) => {
+      // Mirror the server's both-or-neither + ordering rules so the message is
+      // precise and no request is wasted.
+      if ((char_start === undefined) !== (char_end === undefined)) {
+        return errorResult(
+          new Error(
+            "create_annotation needs char_start and char_end TOGETHER (a span), " +
+              "or NEITHER (a whole-sentence note).",
+          ),
+        );
+      }
+      if (
+        char_start !== undefined &&
+        char_end !== undefined &&
+        !(char_start < char_end)
+      ) {
+        return errorResult(
+          new Error("create_annotation needs char_start < char_end."),
+        );
+      }
+      return runJson(() =>
+        client.createAnnotation(submission_id, {
+          sentence_id,
+          char_start,
+          char_end,
+          note,
+          start_time,
+          end_time,
+        }),
+      );
+    },
+  );
+
+  server.registerTool(
+    "update_annotation",
+    {
+      title: "Update a creator annotation",
+      description:
+        "Replace the markdown note on one existing annotation; its anchor and " +
+        "span stay put. Use it to fix or reword a note without moving it; to " +
+        "re-anchor a span you must delete_annotation and create it again. " +
+        "Returns the updated annotation (staleness recomputed). 404 means the " +
+        "annotation does not exist or is not on this episode. Requires the " +
+        "annotations:write scope.",
+      inputSchema: {
+        submission_id: z.string().min(1).describe("The submission id."),
+        annotation_id: z
+          .number()
+          .int()
+          .describe("The annotation to update (id from list_annotations)."),
+        note: z
+          .string()
+          .min(1)
+          .max(5000)
+          .describe("The replacement markdown note (1-5000 chars)."),
+      },
+    },
+    async ({ submission_id, annotation_id, note }) =>
+      runJson(() =>
+        client.updateAnnotation(submission_id, annotation_id, note),
+      ),
+  );
+
+  server.registerTool(
+    "delete_annotation",
+    {
+      title: "Delete a creator annotation",
+      description:
+        "Permanently delete ONE creator annotation from your episode (the tint " +
+        "and its note disappear; any follower note card stops being generated). " +
+        "Destructive and not undoable: delete only an annotation the user asked " +
+        "to remove, a stale one you are replacing, or one whose 'selected_text' " +
+        "did not match the span you intended (then create it again with " +
+        "corrected offsets). Returns {deleted, annotation_id}. 404 means the id " +
+        "does not exist or is not on this episode. Requires the " +
+        "annotations:write scope.",
+      annotations: { destructiveHint: true, idempotentHint: true },
+      inputSchema: {
+        submission_id: z.string().min(1).describe("The submission id."),
+        annotation_id: z
+          .number()
+          .int()
+          .describe("The annotation to delete (id from list_annotations)."),
+      },
+    },
+    async ({ submission_id, annotation_id }) =>
+      runJson(() => client.deleteAnnotation(submission_id, annotation_id)),
   );
 }

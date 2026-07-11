@@ -126,6 +126,51 @@ export interface DeleteDraftResult {
   deleted_sentences: number;
 }
 
+/** One creator annotation: a markdown note anchored to a transcript sentence,
+ *  tinted onto a char span or the whole sentence. */
+export interface AnnotationV1 {
+  id: number;
+  /** The sentence's stable id (survives split/merge), from get_transcript. */
+  sentence_id: number;
+  /** null (with char_end) for a whole-sentence note; else a code-point offset. */
+  char_start: number | null;
+  char_end: number | null;
+  /** Server snapshot of display[char_start:char_end]; verify it after create. */
+  selected_text: string | null;
+  note: string;
+  /** The sentence was edited since; the app hides the tint until re-anchored. */
+  stale: boolean;
+  start_time: number | null;
+  end_time: number | null;
+}
+
+/** Result of GET /submissions/{id}/annotations. */
+export interface AnnotationList {
+  /** Ordered by sentence, then char_start. */
+  annotations: AnnotationV1[];
+  count: number;
+  /** The per-submission cap, so an agent can budget how many more to add. */
+  max_annotations: number;
+}
+
+/** Body of POST /submissions/{id}/annotations. char_start/char_end are
+ *  both-or-neither (neither = a whole-sentence note); offsets are Unicode
+ *  code points into the sentence's display. */
+export interface CreateAnnotationBody {
+  sentence_id: number;
+  char_start?: number | null;
+  char_end?: number | null;
+  note: string;
+  start_time?: number | null;
+  end_time?: number | null;
+}
+
+/** Result of DELETE /submissions/{id}/annotations/{annotation_id}. */
+export interface DeleteAnnotationResult {
+  deleted: boolean;
+  annotation_id: number;
+}
+
 export type QueryValue = string | number | boolean | undefined | null;
 
 /** How long any single request may take before we abort it. */
@@ -291,6 +336,22 @@ export class LingoChunkClient {
     headers["Content-Type"] = "application/json";
     const res = await fetch(this.buildUrl(path), {
       method: "PUT",
+      headers,
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    });
+    if (!res.ok) {
+      await this.raiseForStatus(res);
+    }
+    return (await res.json()) as T;
+  }
+
+  /** PATCH a JSON body to an endpoint and parse the JSON response. */
+  private async patchJson<T>(path: string, body: unknown): Promise<T> {
+    const headers = this.authHeaders("application/json");
+    headers["Content-Type"] = "application/json";
+    const res = await fetch(this.buildUrl(path), {
+      method: "PATCH",
       headers,
       body: JSON.stringify(body),
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
@@ -487,6 +548,52 @@ export class LingoChunkClient {
       `/submissions/${encodeURIComponent(submissionId)}/translations/${encodeURIComponent(
         language,
       )}`,
+    );
+  }
+
+  // --- Creator annotation endpoints (phase 5) -----------------------------
+
+  /** List a submission's creator annotations (ordered), with the per-submission
+   *  cap so an agent can budget how many more to add. */
+  listAnnotations(submissionId: string): Promise<AnnotationList> {
+    return this.getJson(
+      `/submissions/${encodeURIComponent(submissionId)}/annotations`,
+    );
+  }
+
+  /** Create one annotation on a sentence span (or the whole sentence). The
+   *  response echoes the server's selected_text snapshot so the caller can
+   *  verify the span it anchored. */
+  createAnnotation(
+    submissionId: string,
+    body: CreateAnnotationBody,
+  ): Promise<AnnotationV1> {
+    return this.postJson(
+      `/submissions/${encodeURIComponent(submissionId)}/annotations`,
+      body,
+    );
+  }
+
+  /** Replace one annotation's markdown note (anchor unchanged; staleness is
+   *  recomputed against the current sentence). */
+  updateAnnotation(
+    submissionId: string,
+    annotationId: number,
+    note: string,
+  ): Promise<AnnotationV1> {
+    return this.patchJson(
+      `/submissions/${encodeURIComponent(submissionId)}/annotations/${annotationId}`,
+      { note },
+    );
+  }
+
+  /** Delete one annotation. Returns {deleted, annotation_id}. */
+  deleteAnnotation(
+    submissionId: string,
+    annotationId: number,
+  ): Promise<DeleteAnnotationResult> {
+    return this.deleteJson(
+      `/submissions/${encodeURIComponent(submissionId)}/annotations/${annotationId}`,
     );
   }
 }

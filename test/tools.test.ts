@@ -115,12 +115,14 @@ function textOf(result: CallToolResult): string {
 }
 
 describe("tool registration", () => {
-  it("registers all eighteen tools", () => {
+  it("registers all twenty-two tools", () => {
     expect([...tools.keys()].sort()).toEqual(
       [
         "add_card",
         "add_language",
         "commit_language",
+        "create_annotation",
+        "delete_annotation",
         "delete_lesson",
         "discard_language_draft",
         "export_anki_deck",
@@ -129,6 +131,7 @@ describe("tool registration", () => {
         "get_transcript",
         "get_translation_source",
         "get_vocabulary",
+        "list_annotations",
         "list_decks",
         "list_languages",
         "list_library",
@@ -136,6 +139,7 @@ describe("tool registration", () => {
         "put_language_translations",
         "save_lesson",
         "search_examples",
+        "update_annotation",
       ].sort(),
     );
   });
@@ -1053,6 +1057,207 @@ describe("language tools", () => {
     expect(result.isError).toBe(true);
     const text = textOf(result);
     expect(text).toContain("translations:write");
+    expect(text).toContain("Mint a new token");
+  });
+});
+
+describe("annotation tools", () => {
+  it("list_annotations GETs /submissions/{id}/annotations and returns the JSON", async () => {
+    const body = {
+      annotations: [
+        {
+          id: 1,
+          sentence_id: 42,
+          char_start: 4,
+          char_end: 12,
+          selected_text: "am Ball",
+          note: "**am Ball**",
+          stale: false,
+          start_time: null,
+          end_time: null,
+        },
+      ],
+      count: 1,
+      max_annotations: 200,
+    };
+    mockFetch(jsonResponse(body));
+    const result = await call("list_annotations", { submission_id: "s1" });
+    expect(lastUrl).toBe("https://api.test/api/v1/submissions/s1/annotations");
+    expect(lastInit.method).toBe("GET");
+    expect(JSON.parse(textOf(result))).toEqual(body);
+  });
+
+  it("create_annotation POSTs a span annotation and echoes selected_text", async () => {
+    mockFetch(
+      jsonResponse(
+        {
+          id: 5,
+          sentence_id: 42,
+          char_start: 4,
+          char_end: 12,
+          selected_text: "am Ball",
+          note: "**am Ball** - informal",
+          stale: false,
+          start_time: null,
+          end_time: null,
+        },
+        201,
+      ),
+    );
+    const result = await call("create_annotation", {
+      submission_id: "abc/123",
+      sentence_id: 42,
+      char_start: 4,
+      char_end: 12,
+      note: "**am Ball** - informal",
+    });
+    expect(lastUrl).toBe(
+      "https://api.test/api/v1/submissions/abc%2F123/annotations",
+    );
+    expect(lastInit.method).toBe("POST");
+    // start_time/end_time absent -> not serialised (JSON.stringify drops them).
+    expect(JSON.parse(String(lastInit.body))).toEqual({
+      sentence_id: 42,
+      char_start: 4,
+      char_end: 12,
+      note: "**am Ball** - informal",
+    });
+    expect(JSON.parse(textOf(result)).selected_text).toBe("am Ball");
+  });
+
+  it("create_annotation omits both offsets for a whole-sentence note", async () => {
+    mockFetch(
+      jsonResponse(
+        {
+          id: 6,
+          sentence_id: 7,
+          char_start: null,
+          char_end: null,
+          selected_text: null,
+          note: "whole line",
+          stale: false,
+          start_time: null,
+          end_time: null,
+        },
+        201,
+      ),
+    );
+    await call("create_annotation", {
+      submission_id: "s1",
+      sentence_id: 7,
+      note: "whole line",
+    });
+    expect(JSON.parse(String(lastInit.body))).toEqual({
+      sentence_id: 7,
+      note: "whole line",
+    });
+  });
+
+  it("create_annotation rejects a one-sided char range client-side, naming both", async () => {
+    const spy = vi.fn();
+    vi.stubGlobal("fetch", spy);
+    const result = await call("create_annotation", {
+      submission_id: "s1",
+      sentence_id: 7,
+      char_start: 4,
+      note: "x",
+    });
+    expect(result.isError).toBe(true);
+    const text = textOf(result);
+    expect(text).toContain("char_start");
+    expect(text).toContain("char_end");
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it("create_annotation rejects char_start >= char_end client-side", async () => {
+    const spy = vi.fn();
+    vi.stubGlobal("fetch", spy);
+    const result = await call("create_annotation", {
+      submission_id: "s1",
+      sentence_id: 7,
+      char_start: 8,
+      char_end: 8,
+      note: "x",
+    });
+    expect(result.isError).toBe(true);
+    expect(textOf(result)).toContain("char_start < char_end");
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it("create_annotation rejects an over-long note client-side (cap 5000)", async () => {
+    const spy = vi.fn();
+    vi.stubGlobal("fetch", spy);
+    await expect(
+      call("create_annotation", {
+        submission_id: "s1",
+        sentence_id: 7,
+        note: "x".repeat(5001),
+      }),
+    ).rejects.toThrow();
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it("update_annotation PATCHes just the note to /annotations/{id}", async () => {
+    mockFetch(
+      jsonResponse({
+        id: 5,
+        sentence_id: 42,
+        char_start: 4,
+        char_end: 12,
+        selected_text: "am Ball",
+        note: "reworded",
+        stale: false,
+        start_time: null,
+        end_time: null,
+      }),
+    );
+    const result = await call("update_annotation", {
+      submission_id: "s1",
+      annotation_id: 5,
+      note: "reworded",
+    });
+    expect(lastUrl).toBe(
+      "https://api.test/api/v1/submissions/s1/annotations/5",
+    );
+    expect(lastInit.method).toBe("PATCH");
+    expect(JSON.parse(String(lastInit.body))).toEqual({ note: "reworded" });
+    expect(JSON.parse(textOf(result)).note).toBe("reworded");
+  });
+
+  it("delete_annotation DELETEs by id and returns {deleted, annotation_id}", async () => {
+    mockFetch(jsonResponse({ deleted: true, annotation_id: 5 }));
+    const result = await call("delete_annotation", {
+      submission_id: "s1",
+      annotation_id: 5,
+    });
+    expect(lastUrl).toBe(
+      "https://api.test/api/v1/submissions/s1/annotations/5",
+    );
+    expect(lastInit.method).toBe("DELETE");
+    expect(JSON.parse(textOf(result))).toEqual({
+      deleted: true,
+      annotation_id: 5,
+    });
+  });
+
+  it("an annotation write tool surfaces a 403 naming the annotations:write scope", async () => {
+    mockFetch(
+      jsonResponse(
+        {
+          detail:
+            "This token is missing the required scope(s): annotations:write",
+        },
+        403,
+      ),
+    );
+    const result = await call("create_annotation", {
+      submission_id: "s1",
+      sentence_id: 1,
+      note: "x",
+    });
+    expect(result.isError).toBe(true);
+    const text = textOf(result);
+    expect(text).toContain("annotations:write");
     expect(text).toContain("Mint a new token");
   });
 });
