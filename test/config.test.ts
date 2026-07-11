@@ -49,6 +49,16 @@ describe("loadHttpConfig", () => {
     const config = loadHttpConfig({});
     expect(config.baseUrl).toBe("https://lingochunk.com");
     expect(config.port).toBe(8100);
+    expect(config.publicOrigin).toBe("https://lingochunk.com");
+  });
+
+  it("lets the public origin diverge from the in-network upstream", () => {
+    const config = loadHttpConfig({
+      LINGOCHUNK_BASE_URL: "http://lingochunk-web:8000",
+      LINGOCHUNK_PUBLIC_ORIGIN: "https://lingochunk.com/",
+    });
+    expect(config.baseUrl).toBe("http://lingochunk-web:8000");
+    expect(config.publicOrigin).toBe("https://lingochunk.com");
   });
 
   it("prefers LINGOCHUNK_MCP_PORT over the PaaS PORT fallback", () => {

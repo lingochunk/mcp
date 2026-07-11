@@ -20,6 +20,9 @@ export interface HttpConfig {
   baseUrl: string;
   /** TCP port to listen on. */
   port: number;
+  /** PUBLIC origin of the deployment, for URLs handed to clients (OAuth
+   *  discovery). Distinct from baseUrl, which is the in-network upstream. */
+  publicOrigin: string;
 }
 
 const DEFAULT_HTTP_PORT = 8100;
@@ -32,9 +35,14 @@ const DEFAULT_HTTP_PORT = 8100;
  *   reverse proxy.
  * - LINGOCHUNK_MCP_PORT     (optional) listen port, default 8100. PORT is
  *   honoured as a fallback for PaaS conventions.
+ * - LINGOCHUNK_PUBLIC_ORIGIN (optional) the origin clients see (default the
+ *   production site); used to build OAuth discovery URLs in 401 responses.
  */
 export function loadHttpConfig(env: NodeJS.ProcessEnv = process.env): HttpConfig {
   const baseUrl = validateBaseUrl(env.LINGOCHUNK_BASE_URL ?? DEFAULT_BASE_URL);
+  const publicOrigin = validateBaseUrl(
+    env.LINGOCHUNK_PUBLIC_ORIGIN ?? DEFAULT_BASE_URL,
+  );
   const rawPort = (env.LINGOCHUNK_MCP_PORT ?? env.PORT ?? "").trim();
   const port = rawPort ? Number(rawPort) : DEFAULT_HTTP_PORT;
   if (!Number.isInteger(port) || port < 1 || port > 65535) {
@@ -42,7 +50,7 @@ export function loadHttpConfig(env: NodeJS.ProcessEnv = process.env): HttpConfig
       `LINGOCHUNK_MCP_PORT must be an integer in 1-65535, got: ${rawPort}`,
     );
   }
-  return { baseUrl, port };
+  return { baseUrl, port, publicOrigin };
 }
 
 /** Normalise and validate an API origin, throwing a clear onboarding error. */

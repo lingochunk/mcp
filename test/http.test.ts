@@ -41,6 +41,7 @@ beforeAll(async () => {
     baseUrl: `http://127.0.0.1:${port(fakeApi)}`,
     port: 0,
     version: "0.0.0-test",
+    publicOrigin: "https://lingochunk.example",
   });
   mcpUrl = new URL(`http://127.0.0.1:${port(mcp)}/mcp`);
 });
@@ -69,7 +70,12 @@ describe("hosted HTTP server", () => {
       body: JSON.stringify({ jsonrpc: "2.0", method: "ping", id: 1 }),
     });
     expect(res.status).toBe(401);
-    expect(res.headers.get("www-authenticate")).toMatch(/Bearer/);
+    const challenge = res.headers.get("www-authenticate") ?? "";
+    expect(challenge).toMatch(/Bearer/);
+    // OAuth discovery (RFC 9728): clients follow this to find the sign-in flow.
+    expect(challenge).toContain(
+      'resource_metadata="https://lingochunk.example/.well-known/oauth-protected-resource/mcp"',
+    );
     const body = (await res.json()) as { error: { message: string } };
     expect(body.error.message).toMatch(/lcp_/);
     expect(body.error.message).toMatch(/API tokens/);

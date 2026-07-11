@@ -53,9 +53,11 @@ function bearerToken(req: IncomingMessage): string | null {
   return token ? token : null;
 }
 
-function unauthorized(res: ServerResponse): void {
+function unauthorized(res: ServerResponse, publicOrigin: string): void {
   // JSON-RPC error shape so MCP clients surface the message; -32001 is the
-  // de-facto "auth required" code used across MCP servers.
+  // de-facto "auth required" code used across MCP servers. resource_metadata
+  // (RFC 9728) is what OAuth-capable clients (claude.ai, ChatGPT, Gemini)
+  // follow to discover the sign-in flow served by the main app.
   sendJson(
     res,
     401,
@@ -64,15 +66,20 @@ function unauthorized(res: ServerResponse): void {
       error: {
         code: -32001,
         message:
-          "Authentication required. Create a personal access token in your " +
+          "Authentication required. Sign in via OAuth (your client offers " +
+          "this automatically), or create a personal access token in your " +
           "LingoChunk account settings (Settings -> API tokens, it starts " +
           "with 'lcp_') and send it as 'Authorization: Bearer <token>'. " +
-          "For clients without a token field (e.g. claude.ai custom " +
-          "connectors), put it in the URL instead: /mcp/t/<token>.",
+          "For clients without a token field, put it in the URL instead: " +
+          "/mcp/t/<token>.",
       },
       id: null,
     },
-    { "WWW-Authenticate": 'Bearer realm="LingoChunk", error="invalid_token"' },
+    {
+      "WWW-Authenticate":
+        'Bearer realm="LingoChunk", error="invalid_token", ' +
+        `resource_metadata="${publicOrigin}/.well-known/oauth-protected-resource/mcp"`,
+    },
   );
 }
 
@@ -187,7 +194,7 @@ async function handle(
 
   const token = bearerToken(req) ?? pathToken;
   if (!token) {
-    unauthorized(res);
+    unauthorized(res, options.publicOrigin);
     return;
   }
 
