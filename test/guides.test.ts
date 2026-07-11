@@ -10,6 +10,7 @@ import { GUIDE_SOURCES, renderModule } from "../scripts/generate-guides.js";
 
 const TOPICS: GuideTopic[] = [
   "lesson",
+  "course",
   "cards",
   "annotations",
   "add-language",
@@ -17,7 +18,7 @@ const TOPICS: GuideTopic[] = [
 ];
 
 describe("embedded authoring guides", () => {
-  it("embeds all five topics", () => {
+  it("embeds all six topics", () => {
     expect([...GUIDE_TOPICS].sort()).toEqual([...TOPICS].sort());
     expect(GUIDE_SOURCES.map((s) => s.topic).sort()).toEqual(
       [...TOPICS].sort(),

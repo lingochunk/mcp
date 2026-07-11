@@ -113,7 +113,7 @@ describe("hosted HTTP server", () => {
     }
   });
 
-  it("advertises the prompts capability and lists all five authoring prompts", async () => {
+  it("advertises the prompts capability and lists all six authoring prompts", async () => {
     const client = await mcpClient("lcp_alpha");
     try {
       // The capability must be in the initialize result, or OAuth clients
@@ -126,6 +126,7 @@ describe("hosted HTTP server", () => {
           "lingochunk-add-language",
           "lingochunk-annotate",
           "lingochunk-cards",
+          "lingochunk-course",
           "lingochunk-discuss",
           "lingochunk-lesson",
         ].sort(),

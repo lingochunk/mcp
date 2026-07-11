@@ -115,14 +115,16 @@ function textOf(result: CallToolResult): string {
 }
 
 describe("tool registration", () => {
-  it("registers all twenty-five tools", () => {
+  it("registers all twenty-nine tools", () => {
     expect([...tools.keys()].sort()).toEqual(
       [
         "add_card",
         "add_language",
         "commit_language",
         "create_annotation",
+        "create_course",
         "delete_annotation",
+        "delete_course",
         "delete_lesson",
         "discard_language_draft",
         "export_anki_deck",
@@ -134,6 +136,7 @@ describe("tool registration", () => {
         "get_translation_source",
         "get_vocabulary",
         "list_annotations",
+        "list_courses",
         "list_decks",
         "list_languages",
         "list_lessons",
@@ -143,6 +146,7 @@ describe("tool registration", () => {
         "save_lesson",
         "search_examples",
         "update_annotation",
+        "validate_lesson",
       ].sort(),
     );
   });
@@ -160,8 +164,8 @@ describe("get_authoring_guide", () => {
     expect(text).not.toContain("name: lingochunk-lesson");
   });
 
-  it("serves a distinct, non-trivial guide for each of the five topics", async () => {
-    const topics = ["lesson", "cards", "annotations", "add-language", "discuss"];
+  it("serves a distinct, non-trivial guide for each of the six topics", async () => {
+    const topics = ["lesson", "course", "cards", "annotations", "add-language", "discuss"];
     const bodies = new Set<string>();
     for (const topic of topics) {
       const text = textOf(await call("get_authoring_guide", { topic }));

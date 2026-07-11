@@ -70,22 +70,30 @@ the user to add the LingoChunk MCP server (see the plugin README) and stop.
    archetype menu is what stops every lesson looking the same. See
    "The scaffold and the archetype menu" below.
 
-5. **Save.** `save_lesson` with `{document}`. Set
+5. **Validate, then save.** Call `validate_lesson` with `{document}` FIRST:
+   it returns EVERY problem at once (schema + reference), so you fix the whole
+   document in one pass instead of burning save -> 400 -> fix cycles. Read the
+   `errors` codes: `schema_invalid` carries a `loc` (dotted path to the bad
+   field); `unknown_positions` / `position_outside_slice` mean a sentence
+   reference is wrong; `dialogue_mismatch` means quote the transcript verbatim
+   (including punctuation); `order_mismatch` means an `exercise_order` item's
+   segments do not reassemble its anchored sentence. Only once it returns
+   `valid: true` do you `save_lesson` with `{document}`. Set
    `generator: {skill: "lingochunk-lesson"}` so the app's lessons list shows
-   which skill built it (episodes collect lessons from several skills).
-   On 400, read the code:
-   `unknown_positions` / `position_outside_slice` mean a sentence reference
-   is wrong; `dialogue_mismatch` means quote the transcript verbatim
-   (including punctuation). Fix and retry. The response's `unknown_lemmas`
-   lists glossary lemmas the episode does not know - prefer the lemma form
-   the episode's vocabulary uses and re-save if any look wrong.
+   which skill built it (episodes collect lessons from several skills). Both
+   calls report `unknown_lemmas` (advisory only - glossary lemmas the episode
+   does not know); prefer the lemma form the episode's vocabulary uses and fix
+   any that look wrong before saving.
 
 6. **Deliver.** Give the user the `app_url` (the lesson opens in a Lessons
-   tab on the episode). Offer `add_card` for drill words the lesson
-   introduced (a 409 means it is already there - skip and carry on; never
-   add `status=known` words). Mention the in-app Download button if they
-   want the offline HTML worksheet (it has no audio by design). Summarise
-   what the lesson covers and which words it drills.
+   tab on the episode). If the user asked for a course or a series of lessons,
+   file this one under a course: `create_course` once, then pass its id as
+   `save_lesson`'s `course_id` with a `sequence` (see the `lingochunk-course`
+   guide). Offer `add_card` for drill words the lesson introduced (a 409 means
+   it is already there - skip and carry on; never add `status=known` words).
+   Mention the in-app Download button if they want the offline HTML worksheet
+   (it has no audio by design). Summarise what the lesson covers and which
+   words it drills.
 
 ## Anchoring (mandatory)
 
@@ -135,6 +143,9 @@ identical. The archetypes (recipes for the starred ones are below):
 | Grammar gap-fill | `exercise_gap_fill` | the grammar point itself, every lesson |
 | Vocabulary gap-fill | `exercise_gap_fill` + `wordbank` | vocabulary consolidation, low/mid |
 | Match words -> meanings | `exercise_match` | vocabulary, low/mid levels |
+| Sentence reorder * | `exercise_order` | word order / clause structure, every level |
+| Dictation * | `exercise_dictation` | native-audio dictation, listening precision |
+| Shadowing * | `exercise_shadow` | pronunciation & prosody, the differentiator |
 | Production | `exercise_production` | active use, mid/high levels |
 
 **Which archetypes for which lesson** (grammar-point type x level -> pick from):
@@ -142,7 +153,7 @@ identical. The archetypes (recipes for the starred ones are below):
 | Grammar point | A1-A2 | B1-B2 | C1+ |
 |---|---|---|---|
 | Verb morphology (Perfekt, tense) | minimal-pair MCQ, grammar gap-fill | back-chain ladder, grammar gap-fill | anticipation round, production |
-| Word order / clause structure | T/F comprehension, grammar gap-fill | back-chain ladder, grammar gap-fill | anticipation round, production |
+| Word order / clause structure | sentence reorder, T/F comprehension | sentence reorder, back-chain ladder | anticipation round, production |
 | Cases & endings | minimal-pair MCQ, match | grammar gap-fill, minimal-pair MCQ | production, anticipation round |
 | Separable / prefix verbs | minimal-pair MCQ, listening-detail MCQ | minimal-pair MCQ, grammar gap-fill | anticipation round, production |
 | Connectors / subordination | T/F comprehension, vocabulary gap-fill | grammar gap-fill, production | production, anticipation round |
@@ -216,6 +227,39 @@ learner's language at A1/A2) - and a `prompt` that states something about the
 passage. Place 2-3 of them after the Listen section. Add `audio` + `position`
 to make it a listening check rather than a reading one.
 
+### Sentence reorder (Satzbau)
+
+An `exercise_order` with 1-5 `items`, each a sentence broken into `segments`
+(3-12 chunks) IN CORRECT ORDER - the renderer scrambles them; the learner
+reassembles. This is the right tool whenever the grammar point is word order
+or clause structure (verb-second, verb-final in subordinate clauses,
+separable-prefix placement): it supersedes an ad-hoc gap-fill where a real
+scramble fits. Anchor each item to its sentence with `position` and the server
+checks the segments reassemble the stored sentence (whitespace-insensitive),
+rejecting a drifted scramble with `order_mismatch`; so quote the real chunks,
+do not paraphrase. Split at meaningful units (a chunk can be a word or a short
+phrase like "am Wochenende"), and add `translation` so the learner has the
+meaning to aim for.
+
+### Dictation (Diktat)
+
+An `exercise_dictation` with 1-5 `items`, each anchoring a stored sentence by
+`position` (REQUIRED). The app plays that sentence's native audio and diffs the
+learner's typing against the LIVE transcript word by word - nothing is copied
+into the document, so the answer stays truthful as the transcript is edited.
+Pick 2-4 SHORT, clearly-articulated sentences (dictation of a long or mumbled
+line just frustrates); optionally set a wider `audio` window to include a beat
+of lead-in, keeping it COVERING the sentence. Add `translation` for the meaning.
+
+### Shadowing (the differentiator)
+
+An `exercise_shadow` with 1-8 `items`, each a stored sentence by `position`
+(REQUIRED) - the app plays the native line, records the learner, and replays
+their take (in-memory only, no upload, no score - self-assessed). This is the
+product's core practice move inline in a lesson; use it to make a lesson end in
+real speaking. Pick 3-8 of the dialogue's best lines - the ones worth being
+able to say fluently - in the order they occur. Add `translation` per line.
+
 ## The lesson.v1 document (quick reference)
 
 Top level: `{format:"lesson.v1", title, subtitle?, language,
@@ -234,14 +278,21 @@ correct:0-based index}` · `exercise_gap_fill {title?, instruction?, wordbank?,
 items:[{position?, text, answers:[[alternatives],...], translation?}]}`
 (gaps are `{{1}}`, `{{2}}`, ... in `text`; `answers[n-1]` lists accepted
 alternatives for gap n) · `exercise_match {title?, instruction?,
-pairs:[{left,right}][2..8]}` · `exercise_production {title?, instruction?,
-prompt, model_answer}` · `review {can_do?[<=5], new_lemmas?[<=12]}`.
+pairs:[{left,right}][2..8]}` · `exercise_order {title?, instruction?,
+items:[{position?, segments[3..12] in correct order, translation?}][1..5]}`
+(segments must reassemble the anchored sentence) · `exercise_dictation
+{title?, instruction?, items:[{position (REQUIRED), audio?:{start,end},
+translation?}][1..5]}` · `exercise_shadow {title?, instruction?,
+items:[{position (REQUIRED), translation?}][1..8]}` · `exercise_production
+{title?, instruction?, prompt, model_answer}` · `review {can_do?[<=5],
+new_lemmas?[<=12]}`.
 
 `position?` in the reference is the SCHEMA shape (optional); the Anchoring
 section is where authoring policy makes some of these anchors mandatory.
 
 Caps: 40 blocks, 30 dialogue lines, 20 vocab entries, 5 MCQ options, 10
-gap-fill items, 8 match pairs, 8 highlight spans per line, 1 MB serialized.
+gap-fill items, 8 match pairs, 5 order items (3-12 segments each), 5 dictation
+items, 8 shadow items, 8 highlight spans per line, 1 MB serialized.
 
 The server is the validator of record (strict: unknown fields and block
 types are rejected). Audio is `[start,end)` seconds into the ORIGINAL

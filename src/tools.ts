@@ -507,20 +507,22 @@ export function registerTools(
         "Fetch the craft guide for a LingoChunk authoring task, so your output " +
         "matches the app's own quality instead of rendering flat. CALL THIS " +
         "FIRST - before you compose - the first time in a conversation you " +
-        "build any of: a lesson (topic 'lesson', before save_lesson), " +
-        "flashcards ('cards', before add_card), creator notes ('annotations', " +
-        "before create_annotation), a translation / added language " +
-        "('add-language', before add_language or the draft flow), or a guided " +
-        "discussion ('discuss'). Returns the guide markdown: anchoring rules, " +
-        "the block/kind menu, and worked recipes. Read-only; needs no scope.",
+        "build any of: a lesson (topic 'lesson', before save_lesson), a " +
+        "multi-lesson course ('course', before create_course), flashcards " +
+        "('cards', before add_card), creator notes ('annotations', before " +
+        "create_annotation), a translation / added language ('add-language', " +
+        "before add_language or the draft flow), or a guided discussion " +
+        "('discuss'). Returns the guide markdown: anchoring rules, the " +
+        "block/kind menu, and worked recipes. Read-only; needs no scope.",
       inputSchema: {
         topic: z
           .enum(GUIDE_TOPICS as unknown as [GuideTopic, ...GuideTopic[]])
           .describe(
-            "Which authoring task: 'lesson' (lesson.v1 documents), 'cards' " +
-              "(card.v1 flashcards), 'annotations' (creator notes), " +
-              "'add-language' (translations / leveled same-language decks) or " +
-              "'discuss' (guided episode discussion).",
+            "Which authoring task: 'lesson' (lesson.v1 documents), 'course' " +
+              "(a multi-lesson series), 'cards' (card.v1 flashcards), " +
+              "'annotations' (creator notes), 'add-language' (translations / " +
+              "leveled same-language decks) or 'discuss' (guided episode " +
+              "discussion).",
           ),
       },
     },
@@ -900,8 +902,10 @@ export function registerTools(
         "sentence references (400 with a stable code). LEGACY: pass `html` " +
         "(a complete self-contained HTML file, 10 MB max, title + language " +
         "required) to store an opaque artefact opened via a short-lived " +
-        "view URL. Exactly one of document/html. Requires the lessons:write " +
-        "scope.",
+        "view URL. Exactly one of document/html. To catch every problem in one " +
+        "pass, call validate_lesson FIRST and fix what it reports, then " +
+        "save_lesson. File a lesson into a course (from create_course) with " +
+        "course_id + optional sequence. Requires the lessons:write scope.",
       inputSchema: {
         title: z
           .string()
@@ -932,9 +936,63 @@ export function registerTools(
           .array(z.string())
           .optional()
           .describe("Optional provenance: the episode ids the lesson was built from."),
+        course_id: z
+          .string()
+          .max(36)
+          .optional()
+          .describe(
+            "File this lesson under a course you own (from create_course).",
+          ),
+        sequence: z
+          .number()
+          .int()
+          .optional()
+          .describe(
+            "Ordering position within the course (ties break by created_at). " +
+              "Requires course_id.",
+          ),
       },
     },
-    async (args) => runJson(() => client.createLesson(args)),
+    async (args) => {
+      // Mirror the server's request-shape rule client-side: sequence only means
+      // something inside a course, so a bare sequence is a 422 on the server.
+      if (args.sequence !== undefined && args.course_id === undefined) {
+        return errorResult(
+          new Error("save_lesson 'sequence' requires 'course_id'."),
+        );
+      }
+      return runJson(() => client.createLesson(args));
+    },
+  );
+
+  server.registerTool(
+    "validate_lesson",
+    {
+      title: "Validate a lesson document",
+      description:
+        "Dry-run validate a lesson.v1 `document` WITHOUT saving it, and get " +
+        "EVERY problem back at once instead of one save -> 400 -> fix cycle at " +
+        "a time. Call it before save_lesson (repeatedly, as you fix) and only " +
+        "save once it returns valid:true. Returns {valid, errors, " +
+        "unknown_lemmas}: each error carries a stable `code` and a `loc` " +
+        "(dotted path into the document) for schema faults, or `positions` / " +
+        "`audio_windows` for reference faults (the same codes save_lesson " +
+        "raises: unknown_positions, position_outside_slice, " +
+        "audio_outside_episode, audio_outside_slice, dialogue_mismatch, " +
+        "order_mismatch). `unknown_lemmas` is advisory - glossary lemmas the " +
+        "episode does not know; they do NOT make the document invalid. Stores " +
+        "nothing and spends no lesson-cap budget. Requires the lessons:write " +
+        "scope.",
+      inputSchema: {
+        document: z
+          .record(z.unknown())
+          .describe(
+            "A lesson.v1 document (same shape as save_lesson's document).",
+          ),
+      },
+    },
+    async ({ document }) =>
+      runJson(() => client.validateLesson({ document })),
   );
 
   server.registerTool(
@@ -943,10 +1001,12 @@ export function registerTools(
       title: "List lessons",
       description:
         "List the user's saved lessons, newest first: id, title, language, " +
-        "format (lesson.v1 or html), source submission and created_at. " +
-        "Cursor-paginated. Use it to find a lesson id for get_lesson / " +
-        "delete_lesson, or to see what already exists before saving another. " +
-        "Requires the lessons:write scope.",
+        "format (lesson.v1 or html), source submission, created_at, and its " +
+        "course_id / sequence / course_title when the lesson is filed under a " +
+        "course (so you can group without a second call). Cursor-paginated. " +
+        "Use it to find a lesson id for get_lesson / delete_lesson, or to see " +
+        "what already exists before saving another. Requires the lessons:write " +
+        "scope.",
       inputSchema: {
         limit: z.number().int().min(1).max(200).optional(),
         cursor: z
@@ -1006,6 +1066,72 @@ export function registerTools(
       runJson(async () => {
         await client.deleteLesson(lesson_id);
         return { deleted: true, lesson_id };
+      }),
+  );
+
+  server.registerTool(
+    "create_course",
+    {
+      title: "Create a course",
+      description:
+        "Create a course: a named, ordered series to file lessons under " +
+        "(e.g. 'lesson 3 of 8'). Returns {id, title, description, " +
+        "lesson_count, created_at}; pass the id as save_lesson's course_id " +
+        "(with an optional sequence) to place lessons in it. Courses are " +
+        "authored via the API only (no in-app course editor). Requires the " +
+        "lessons:write scope.",
+      inputSchema: {
+        title: z
+          .string()
+          .min(1)
+          .max(255)
+          .describe("Course title (1-255 characters)."),
+        description: z
+          .string()
+          .max(2000)
+          .optional()
+          .describe("Optional longer description of the course."),
+      },
+    },
+    async (args) => runJson(() => client.createCourse(args)),
+  );
+
+  server.registerTool(
+    "list_courses",
+    {
+      title: "List courses",
+      description:
+        "List the user's courses, newest first, each with its lesson_count. " +
+        "Use it to find a course_id for save_lesson (or delete_course), or to " +
+        "see what series already exist before creating another. Requires the " +
+        "lessons:write scope.",
+    },
+    async () => runJson(() => client.listCourses()),
+  );
+
+  server.registerTool(
+    "delete_course",
+    {
+      title: "Delete a course",
+      description:
+        "Delete ONE of the user's courses by id. This un-groups its lessons " +
+        "(their course_id is set NULL) but NEVER deletes them - authored " +
+        "lessons always survive. Destructive only to the grouping, and " +
+        "idempotent. 404 means the id does not exist or is not the user's. " +
+        "Requires the lessons:write scope.",
+      annotations: { destructiveHint: true, idempotentHint: true },
+      inputSchema: {
+        course_id: z
+          .string()
+          .min(1)
+          .max(36)
+          .describe("The course to delete (id from create_course/list_courses)."),
+      },
+    },
+    async ({ course_id }) =>
+      runJson(async () => {
+        await client.deleteCourse(course_id);
+        return { deleted: true, course_id };
       }),
   );
 

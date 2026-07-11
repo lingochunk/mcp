@@ -15,6 +15,7 @@ import { fileURLToPath } from "node:url";
  *  markdown lives. Keep this the single source of truth for both. */
 export const GUIDE_SOURCES: { topic: string; skill: string }[] = [
   { topic: "lesson", skill: "lingochunk-lesson" },
+  { topic: "course", skill: "lingochunk-course" },
   { topic: "cards", skill: "lingochunk-cards" },
   { topic: "annotations", skill: "lingochunk-annotate" },
   { topic: "add-language", skill: "lingochunk-add-language" },

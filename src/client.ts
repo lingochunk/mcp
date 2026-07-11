@@ -423,8 +423,31 @@ export class LingoChunkClient {
     return this.postJson("/lessons", body);
   }
 
+  /** Dry-run validate a lesson.v1 document without saving it: reports every
+   *  failing category at once (schema + reference), so a document can be fixed
+   *  in one pass instead of save -> 400 -> fix cycles. Stores nothing. */
+  validateLesson(body: object): Promise<unknown> {
+    return this.postJson("/lessons/validate", body);
+  }
+
   listLessons(params: Record<string, QueryValue>): Promise<unknown> {
     return this.getJson("/lessons", params);
+  }
+
+  /** Create a course: a named, ordered series to file lessons under. */
+  createCourse(body: object): Promise<unknown> {
+    return this.postJson("/courses", body);
+  }
+
+  /** The caller's courses, newest first, each with its lesson_count. */
+  listCourses(): Promise<unknown> {
+    return this.getJson("/courses");
+  }
+
+  /** Delete a course (owner-scoped). Its lessons survive - the DB sets their
+   *  course_id NULL, un-grouping them. 404 for a foreign or unknown id. */
+  deleteCourse(courseId: string): Promise<void> {
+    return this.deleteNoContent(`/courses/${encodeURIComponent(courseId)}`);
   }
 
   /** The stored lesson.v1 document. Owner-scoped server-side; 404 for HTML

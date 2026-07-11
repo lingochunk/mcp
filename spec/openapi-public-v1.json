@@ -3,7 +3,7 @@
   "info": {
     "title": "LingoChunk Public API",
     "description": "The LingoChunk public API. Read your FSRS-graded vocabulary, look words up, browse your library, pull sliced transcripts and native audio, search your listening history, and cut audio clips.\n\nWrite, too: upload audio recordings for processing (optionally publishing them into a collection you own), add vocabulary and custom cards to your decks, export a deck to Anki, and save a generated HTML lesson to your library.\n\nAuthenticate with a personal access token created in your account settings: send it as `Authorization: Bearer lcp_...`. Each endpoint requires a scope, granted to the token at creation.",
-    "version": "1.5"
+    "version": "1.7"
   },
   "servers": [
     {
@@ -341,7 +341,7 @@
           "public-v1"
         ],
         "summary": "List Library",
-        "description": "List READY submissions in the learner's library (own + followed\ncollections), newest first.\n\nKeyset-paginated on (created_at, id): pass the previous page's\n``next_cursor`` to fetch the next page (same convention as ``/vocab``).\n\n**Requires scope:** `content:read`",
+        "description": "List READY submissions in the learner's library (own + followed/member\ncollections), newest first.\n\nKeyset-paginated on (created_at, id): pass the previous page's\n``next_cursor`` to fetch the next page (same convention as ``/vocab``).\n\n**Requires scope:** `content:read`",
         "operationId": "list_library_api_v1_library_get",
         "parameters": [
           {
@@ -1667,6 +1667,119 @@
         ]
       }
     },
+    "/api/v1/lessons/validate": {
+      "post": {
+        "tags": [
+          "public-v1"
+        ],
+        "summary": "Validate Lesson",
+        "description": "Dry-run validate a lesson.v1 document WITHOUT saving it.\n\nReturns 200 with ``{valid, errors, unknown_lemmas}`` and reports EVERY\nfailing category at once - schema violations (one entry per pydantic error,\nwith a dotted ``loc``) and reference violations (the same stable codes the\nsave route raises: unknown_positions, position_outside_slice,\naudio_outside_episode, audio_outside_slice, dialogue_mismatch,\norder_mismatch) - so an agent can fix a whole document in one pass instead of\nburning save -> 400 -> fix cycles that only surface the first problem.\n\nRuns no persistence and consumes no lesson-cap budget (so it succeeds even\nat the cap). The transcript queries it runs are bounded by the standard\nper-token / per-user surface rate limits; it deliberately does NOT consume\nthe save route's storage-spam write limiter, since it stores nothing and is\nmeant to be called repeatedly before a single save.\n\n404 if the source submission is not accessible; 400 for a body that is not a\nlesson.v1 ``document`` (e.g. the legacy ``html`` save variant); 413 for a\ndocument past the size cap.\n\n**Requires scope:** `lessons:write`",
+        "operationId": "validate_lesson_api_v1_lessons_validate_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LessonValidateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LessonValidationV1"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request parameters",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorV1"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found or not accessible",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorV1"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request body exceeds the size cap",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorV1"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid API token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorV1"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The token lacks the scope this endpoint requires",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorV1"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded. The `Retry-After` response header gives the number of seconds to wait.",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds to wait before retrying",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorV1"
+                }
+              }
+            }
+          }
+        },
+        "x-required-scopes": [
+          "lessons:write"
+        ]
+      }
+    },
     "/api/v1/lessons/{lesson_id}/document": {
       "get": {
         "tags": [
@@ -1871,6 +1984,237 @@
             "schema": {
               "type": "string",
               "title": "Lesson Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not found or not accessible",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorV1"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid API token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorV1"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The token lacks the scope this endpoint requires",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorV1"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded. The `Retry-After` response header gives the number of seconds to wait.",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds to wait before retrying",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorV1"
+                }
+              }
+            }
+          }
+        },
+        "x-required-scopes": [
+          "lessons:write"
+        ]
+      }
+    },
+    "/api/v1/courses": {
+      "get": {
+        "tags": [
+          "public-v1"
+        ],
+        "summary": "List Courses",
+        "description": "List the caller's courses, newest first, each with its lesson count.\n\n**Requires scope:** `lessons:write`",
+        "operationId": "list_courses_api_v1_courses_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CourseListV1"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid API token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorV1"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The token lacks the scope this endpoint requires",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorV1"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded. The `Retry-After` response header gives the number of seconds to wait.",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds to wait before retrying",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorV1"
+                }
+              }
+            }
+          }
+        },
+        "x-required-scopes": [
+          "lessons:write"
+        ]
+      },
+      "post": {
+        "tags": [
+          "public-v1"
+        ],
+        "summary": "Create Course",
+        "description": "Create a course to group lessons into an ordered series.\n\n**Requires scope:** `lessons:write`",
+        "operationId": "create_course_api_v1_courses_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CourseCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CourseV1"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid API token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorV1"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The token lacks the scope this endpoint requires",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorV1"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded. The `Retry-After` response header gives the number of seconds to wait.",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds to wait before retrying",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorV1"
+                }
+              }
+            }
+          }
+        },
+        "x-required-scopes": [
+          "lessons:write"
+        ]
+      }
+    },
+    "/api/v1/courses/{course_id}": {
+      "delete": {
+        "tags": [
+          "public-v1"
+        ],
+        "summary": "Delete Course",
+        "description": "Delete a course (owner only). Its lessons survive - their ``course_id``\nis set NULL by the database, un-grouping them. 404 if the course is not\nyours or does not exist.\n\n**Requires scope:** `lessons:write`",
+        "operationId": "delete_course_api_v1_courses__course_id__delete",
+        "parameters": [
+          {
+            "name": "course_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Course Id"
             }
           }
         ],
@@ -4305,6 +4649,100 @@
         "title": "CommitLanguageResultV1",
         "description": "The enqueued commit job for a drafted language."
       },
+      "CourseCreateRequest": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Title",
+            "description": "Course title (1-255 characters)"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description",
+            "description": "Optional longer description of the course"
+          }
+        },
+        "type": "object",
+        "required": [
+          "title"
+        ],
+        "title": "CourseCreateRequest",
+        "description": "Create a course: an ordered series to file lessons under.\n\nCourses are authored via the API / MCP only (there is no in-app course\neditor). After creating one, save lessons into it with the create-lesson\nrequest's ``course_id`` (+ optional ``sequence``)."
+      },
+      "CourseListV1": {
+        "properties": {
+          "courses": {
+            "items": {
+              "$ref": "#/components/schemas/CourseV1"
+            },
+            "type": "array",
+            "title": "Courses",
+            "description": "Courses"
+          }
+        },
+        "type": "object",
+        "required": [
+          "courses"
+        ],
+        "title": "CourseListV1",
+        "description": "The caller's courses, newest first."
+      },
+      "CourseV1": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id",
+            "description": "Course id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title",
+            "description": "Course title"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description",
+            "description": "Course description"
+          },
+          "lesson_count": {
+            "type": "integer",
+            "title": "Lesson Count",
+            "description": "How many lessons are currently filed under this course"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At",
+            "description": "When the course was created"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "lesson_count",
+          "created_at"
+        ],
+        "title": "CourseV1",
+        "description": "A course the caller owns, plus how many lessons are filed under it."
+      },
       "CreateAnnotationV1": {
         "properties": {
           "sentence_id": {
@@ -4640,6 +5078,46 @@
         "title": "DialogueLine",
         "description": "One transcript sentence presented as a dialogue line.\n\n``position`` anchors the line to the stored sentence (the save route\nverifies ``text`` matches it, so a lesson cannot misattribute content to\nthe recording). ``highlights`` are [start, end) CODE-POINT ranges into\n``text`` for the amber pattern marks (both renderers treat them as code\npoints; supplementary-plane characters count as one). Ranges must not\noverlap - both renderers would otherwise duplicate the overlapped text."
       },
+      "DictationItem": {
+        "properties": {
+          "position": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Position",
+            "description": "1-based transcript position"
+          },
+          "audio": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AudioSlice"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "translation": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Translation"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "position"
+        ],
+        "title": "DictationItem",
+        "description": "One sentence the learner transcribes by ear.\n\n``position`` (REQUIRED) anchors the item to the stored sentence: the\nrenderer plays that sentence and diffs the learner's typing against its\nLIVE transcript text (``display``/``text``), so the answer stays truthful\nas the transcript is edited - nothing is copied into the document.\n\n``audio`` is an OPTIONAL wider play window (e.g. to include a beat of\nlead-in). By convention the author keeps it COVERING the sentence, since\nthe diff target is always the whole stored sentence, never the window; this\nis an authoring expectation, not a validated invariant (the route only\nbounds the window to the episode/slice, to avoid diff-time coupling to\nsentence offsets). When absent the renderer plays the sentence's own\nrange."
+      },
       "DraftSentenceV1": {
         "properties": {
           "position": {
@@ -4702,6 +5180,58 @@
         ],
         "title": "ErrorV1",
         "description": "The uniform error body for every /api/v1 failure."
+      },
+      "ExerciseDictationBlock": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "exercise_dictation",
+            "title": "Type"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 120,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "instruction": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 300,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Instruction"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/DictationItem"
+            },
+            "type": "array",
+            "maxItems": 5,
+            "minItems": 1,
+            "title": "Items"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "type",
+          "items"
+        ],
+        "title": "ExerciseDictationBlock",
+        "description": "Diktat: listen and type the sentence, then see a word-level diff."
       },
       "ExerciseGapFillBlock": {
         "properties": {
@@ -4921,6 +5451,58 @@
         "title": "ExerciseMcqBlock",
         "description": "Multiple choice (recognition or listening comprehension when ``audio``\nis present)."
       },
+      "ExerciseOrderBlock": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "exercise_order",
+            "title": "Type"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 120,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "instruction": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 300,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Instruction"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/OrderItem"
+            },
+            "type": "array",
+            "maxItems": 5,
+            "minItems": 1,
+            "title": "Items"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "type",
+          "items"
+        ],
+        "title": "ExerciseOrderBlock",
+        "description": "Satzbau: reorder the scrambled chunks into the correct sentence."
+      },
       "ExerciseProductionBlock": {
         "properties": {
           "type": {
@@ -4976,6 +5558,58 @@
         ],
         "title": "ExerciseProductionBlock",
         "description": "Free production on ruled lines with a blurred model answer."
+      },
+      "ExerciseShadowBlock": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "exercise_shadow",
+            "title": "Type"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 120,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "instruction": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 300,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Instruction"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ShadowItem"
+            },
+            "type": "array",
+            "maxItems": 8,
+            "minItems": 1,
+            "title": "Items"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "type",
+          "items"
+        ],
+        "title": "ExerciseShadowBlock",
+        "description": "Shadowing: listen to the native line, record yourself, replay your take.\n\nThe product's core practice move, inline in a lesson. No waveform, no\nscoring, no upload - just the loop. Positions join the existing reference\nchecks via ``sentence_positions()``; there is no new route validation and\nno stored answer."
       },
       "FsrsSummaryV1": {
         "properties": {
@@ -5473,6 +6107,31 @@
             "title": "Visibility",
             "description": "'public' publishes the lesson to everyone who can view the source submission (e.g. visitors of a public collection it belongs to). Documents only, and only on a submission you own.",
             "default": "private"
+          },
+          "course_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 36
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Course Id",
+            "description": "File this lesson under a course you own (create one with POST /courses). The course must belong to you."
+          },
+          "sequence": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sequence",
+            "description": "Ordering position within the course (ties break by created_at). Requires 'course_id'."
           }
         },
         "type": "object",
@@ -5555,6 +6214,42 @@
             "title": "Visibility",
             "description": "'private' (owner only) or 'public' (visible to everyone who can view the source submission)",
             "default": "private"
+          },
+          "course_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Course Id",
+            "description": "Id of the course this lesson belongs to, if any"
+          },
+          "sequence": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sequence",
+            "description": "Ordering position within its course (ties break by created_at); null when the lesson is not in a course"
+          },
+          "course_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Course Title",
+            "description": "Title of the course this lesson belongs to (echoed on list responses so a client can group without a second call); null when uncoursed"
           },
           "size_bytes": {
             "type": "integer",
@@ -5742,6 +6437,15 @@
                   "$ref": "#/components/schemas/ExerciseMatchBlock"
                 },
                 {
+                  "$ref": "#/components/schemas/ExerciseOrderBlock"
+                },
+                {
+                  "$ref": "#/components/schemas/ExerciseDictationBlock"
+                },
+                {
+                  "$ref": "#/components/schemas/ExerciseShadowBlock"
+                },
+                {
                   "$ref": "#/components/schemas/ExerciseProductionBlock"
                 },
                 {
@@ -5753,10 +6457,13 @@
                 "mapping": {
                   "audio_slice": "#/components/schemas/AudioSliceBlock",
                   "dialogue": "#/components/schemas/DialogueBlock",
+                  "exercise_dictation": "#/components/schemas/ExerciseDictationBlock",
                   "exercise_gap_fill": "#/components/schemas/ExerciseGapFillBlock",
                   "exercise_match": "#/components/schemas/ExerciseMatchBlock",
                   "exercise_mcq": "#/components/schemas/ExerciseMcqBlock",
+                  "exercise_order": "#/components/schemas/ExerciseOrderBlock",
                   "exercise_production": "#/components/schemas/ExerciseProductionBlock",
+                  "exercise_shadow": "#/components/schemas/ExerciseShadowBlock",
                   "grammar_box": "#/components/schemas/GrammarBoxBlock",
                   "prose": "#/components/schemas/ProseBlock",
                   "review": "#/components/schemas/ReviewBlock",
@@ -5974,6 +6681,42 @@
             "description": "'private' (owner only) or 'public' (visible to everyone who can view the source submission)",
             "default": "private"
           },
+          "course_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Course Id",
+            "description": "Id of the course this lesson belongs to, if any"
+          },
+          "sequence": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sequence",
+            "description": "Ordering position within its course (ties break by created_at); null when the lesson is not in a course"
+          },
+          "course_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Course Title",
+            "description": "Title of the course this lesson belongs to (echoed on list responses so a client can group without a second call); null when uncoursed"
+          },
           "size_bytes": {
             "type": "integer",
             "title": "Size Bytes",
@@ -6004,6 +6747,136 @@
         ],
         "title": "LessonV1",
         "description": "A hosted lesson's metadata. HTML lessons are only ever fetched via a\npresigned view URL (see /lessons/{id}/view-url), never inline from the\napp; lesson.v1 documents open natively in the app (``app_url``)."
+      },
+      "LessonValidateRequest": {
+        "properties": {
+          "document": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document",
+            "description": "A lesson.v1 document (same shape as the save request's 'document'). Validated but never stored."
+          },
+          "html": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Html",
+            "description": "Not validatable: HTML lessons have no dry-run validation. Sending it is rejected so a save-shaped body fails loudly."
+          }
+        },
+        "type": "object",
+        "title": "LessonValidateRequest",
+        "description": "Dry-run validate a lesson.v1 ``document`` without saving it.\n\nThe body mirrors the save request's ``document`` field, but the document is\nvalidated leniently (as raw JSON) so EVERY schema failure can be reported in\nthe 200 response rather than surfacing as a single 422. Only lesson.v1\ndocuments are validatable; an ``html`` body (the legacy save variant) is\nrejected, since HTML lessons have no structured invariants to check."
+      },
+      "LessonValidationErrorV1": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code",
+            "description": "Stable failure category"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message",
+            "description": "Human-readable explanation of the failure"
+          },
+          "loc": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Loc",
+            "description": "Dotted path into the document (schema_invalid failures only)"
+          },
+          "positions": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "integer"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Positions",
+            "description": "Every affected 1-based sentence position (position-anchored reference failures)"
+          },
+          "audio_windows": {
+            "anyOf": [
+              {
+                "items": {
+                  "items": {
+                    "type": "number"
+                  },
+                  "type": "array"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Audio Windows",
+            "description": "Every offending [start, end] audio window (audio reference failures)"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "message"
+        ],
+        "title": "LessonValidationErrorV1",
+        "description": "One validation failure found in a dry run.\n\n``code`` is the stable category. Schema failures carry a ``loc`` (a dotted\npath into the document, e.g. ``blocks.3.lines.0.position``) and the pydantic\n``message``. Reference failures carry the same stable codes the save route\nraises (``unknown_positions``, ``position_outside_slice``,\n``audio_outside_episode``, ``audio_outside_slice``, ``dialogue_mismatch``,\n``order_mismatch``) with the offending ``positions`` or ``audio_windows``\nspelled out in full (the human ``message`` truncates long lists; these do\nnot)."
+      },
+      "LessonValidationV1": {
+        "properties": {
+          "valid": {
+            "type": "boolean",
+            "title": "Valid",
+            "description": "True when the document would save cleanly"
+          },
+          "errors": {
+            "items": {
+              "$ref": "#/components/schemas/LessonValidationErrorV1"
+            },
+            "type": "array",
+            "title": "Errors",
+            "description": "Every failure found, across all categories at once (empty when valid)"
+          },
+          "unknown_lemmas": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Unknown Lemmas",
+            "description": "Vocab/review lemmas the source submission does not know; advisory only, they do not make the document invalid"
+          }
+        },
+        "type": "object",
+        "required": [
+          "valid",
+          "errors"
+        ],
+        "title": "LessonValidationV1",
+        "description": "The dry-run result: is the document saveable, and every reason it is not.\n\n``valid`` is true only when ``errors`` is empty. ``unknown_lemmas`` is\nadvisory (it never flips ``valid``): the same vocab/review lemmas the save\nroute reports as lacking a Words-tab crosslink."
       },
       "LessonViewUrlV1": {
         "properties": {
@@ -6183,6 +7056,54 @@
           "right"
         ],
         "title": "MatchPair"
+      },
+      "OrderItem": {
+        "properties": {
+          "position": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1.0,
+                "description": "1-based transcript position"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Position"
+          },
+          "segments": {
+            "items": {
+              "type": "string",
+              "maxLength": 60,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 12,
+            "minItems": 3,
+            "title": "Segments"
+          },
+          "translation": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Translation"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "segments"
+        ],
+        "title": "OrderItem",
+        "description": "One sentence to reassemble from scrambled chunks.\n\n``segments`` are the tokens/chunks IN CORRECT ORDER (the renderer\nscrambles them for the learner). When ``position`` anchors the item to a\nstored sentence, the save route checks the segments reassemble it under a\nwhitespace-insensitive comparison, so a reorder exercise cannot drift from\nthe recording (``strip_all_whitespace``)."
       },
       "ProseBlock": {
         "properties": {
@@ -6475,6 +7396,36 @@
         ],
         "title": "SentenceSearchV1",
         "description": "Search results across the learner's readable library.\n\nResults are a capped sample (see the ``limit`` parameter), not an\nexhaustive set: there is no pagination and no completeness guarantee."
+      },
+      "ShadowItem": {
+        "properties": {
+          "position": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Position",
+            "description": "1-based transcript position"
+          },
+          "translation": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Translation"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "position"
+        ],
+        "title": "ShadowItem",
+        "description": "One sentence the learner shadows (listen → record → replay their take).\n\n``position`` (REQUIRED) anchors the item to the stored sentence: the\nrenderer plays that sentence's own range from the LIVE transcript and shows\nits live text, so the line stays truthful as the transcript is edited -\nnothing is copied into the document. The recorded take is in-memory only\n(never uploaded, never stored), so there is no answer to check or leak and\nthe block contributes nothing to the score (self-assessed, like\nproduction)."
       },
       "SubmissionCreatedV1": {
         "properties": {

@@ -16,7 +16,7 @@ contributions (see [CONTRIBUTING.md](CONTRIBUTING.md)).
 
 ## What it gives an agent
 
-Twenty-five tools. Twelve read from your account; twelve write to it; one
+Twenty-nine tools. Twelve read from your account; sixteen write to it; one
 (`get_authoring_guide`) serves the authoring craft guides so remote clients
 that never see the skills still compose good lessons, cards and annotations.
 
@@ -29,14 +29,18 @@ that never see the skills still compose good lessons, cards and annotations.
 | `get_audio_url` | `content:read` | A short-lived presigned URL to the full native audio (Range-capable). |
 | `search_examples` | `content:read` | Example sentences across your library, by word (`lemma`) or text (`q`). A capped sample, not exhaustive. |
 | `get_audio_clip` | `content:read` | Cuts a short native-audio snippet, **saves it to a local file**, and returns `{path, media_type, size_bytes}` for embedding in lessons. |
-| `get_authoring_guide` | none | Returns the full craft guide for `topic` (`lesson`, `cards`, `annotations`, `add-language`, `discuss`) - the same content as the bundled skills, embedded in the package so remote clients get it too. Call it before composing. |
+| `get_authoring_guide` | none | Returns the full craft guide for `topic` (`lesson`, `course`, `cards`, `annotations`, `add-language`, `discuss`) - the same content as the bundled skills, embedded in the package so remote clients get it too. Call it before composing. |
 | `list_decks` | `cards:write` or `decks:export` | Your study decks with card counts, for picking a `deck_id` to add to or export. |
 | `add_card` | `cards:write` | Adds a card to your review queue (FSRS, starts new). Preferred: the `card.v1` kinds (`word`, `phrase`, `collocation`, `idiom`, `chunk`, `grammar`, `cloze`, `contrast`, `qa`, `production`) anchored to a verbatim transcript sentence - the server derives the highlight/blur painting and native-audio clip, so the card matches the app's own. Legacy: `kind=vocab` from your vocabulary, or `kind=custom` front/back. Omit `deck_id` to use the deck for the card's own submission. |
 | `export_anki_deck` | `decks:export` | Exports a deck to Anki `.apkg` (no LLM), polling internally; returns a download URL when ready. A deck with no linked episode can't be exported. |
-| `save_lesson` | `lessons:write` | Saves a lesson to your private library (100 max). Preferred: a structured `lesson.v1` document the app renders natively (Lessons tab on the episode, real audio, live word state, Ask AI); returns metadata + an `app_url`. Legacy: a self-contained HTML file (10 MB cap) opened via a short-lived view URL. |
-| `list_lessons` | `lessons:write` | Your saved lessons, newest first (id, title, language, format, source episode), cursor-paginated - for finding ids and seeing what already exists. |
+| `validate_lesson` | `lessons:write` | Dry-run validates a `lesson.v1` document WITHOUT saving it, reporting EVERY problem at once (schema faults with a `loc`, reference faults with the same codes `save_lesson` raises) so you fix a document in one pass. Stores nothing; spends no lesson-cap budget. Call it before `save_lesson`. |
+| `save_lesson` | `lessons:write` | Saves a lesson to your private library (100 max). Preferred: a structured `lesson.v1` document the app renders natively (Lessons tab on the episode, real audio, live word state, Ask AI); returns metadata + an `app_url`. Legacy: a self-contained HTML file (10 MB cap) opened via a short-lived view URL. Optional `course_id` (+ `sequence`) files it under a course. |
+| `list_lessons` | `lessons:write` | Your saved lessons, newest first (id, title, language, format, source episode, and `course_id`/`sequence`/`course_title` when filed under a course), cursor-paginated - for finding ids and seeing what already exists. |
 | `get_lesson` | `lessons:write` | Reads back a saved `lesson.v1` document by id. Closes the revision loop: lessons are immutable, so revise = read -> save new -> delete old. |
 | `delete_lesson` | `lessons:write` | Permanently deletes one saved lesson by id (destructive; owner-scoped server-side). Mainly for iterating: re-saving creates a new lesson, so superseded drafts count against the 100-lesson cap. |
+| `create_course` | `lessons:write` | Creates a course: a named, ordered series to file lessons under. Returns its id, for `save_lesson`'s `course_id`. Authored via the API only (no in-app course editor). |
+| `list_courses` | `lessons:write` | Your courses, newest first, each with its lesson count - for finding a `course_id` or seeing what series exist. |
+| `delete_course` | `lessons:write` | Deletes one course by id (destructive to the grouping, idempotent). Its lessons SURVIVE - their `course_id` is set null, un-grouping them; authored content is never deleted. |
 | `list_languages` | `content:read` | An episode's target languages and how to add more: the fan-out group so far (each with its own submission id + status), `available_targets` (ordinary Groq targets), `simplify_targets` (leveled same-language codes like `de-a2`) and in-progress drafts. |
 | `get_translation_source` | `content:read` | Pages the primary's sentences to translate yourself: source text, the pivot-language gloss per sentence and per token (which fixes each word's sense). Feeds the draft flow. |
 | `add_language` | `translations:write` | Fans an episode out into 1-10 extra **ordinary** target languages server-side (Groq, no tokens of yours); returns a job per language. Leveled same-language codes are rejected here - use the draft flow. |
@@ -48,12 +52,16 @@ that never see the skills still compose good lessons, cards and annotations.
 | `update_annotation` | `annotations:write` | Replaces one annotation's note in place (the anchor stays put). |
 | `delete_annotation` | `annotations:write` | Deletes one annotation (destructive); also how you fix a mis-anchored span before re-creating it. |
 
-Plus five skills:
+Plus six skills:
 
 - **`lingochunk-lesson`** - composes a coursebook-style `lesson.v1` document
   (listen, text, vocabulary, one grammar point, graded exercises, review)
   from the tools above, filtering out words you already know; the app
   renders it natively and can export an offline HTML worksheet.
+- **`lingochunk-course`** - plans a multi-lesson series: slices an episode (or
+  collection) into coherent parts, creates a course, then builds N lessons via
+  the lesson skill with a different grammar point and ramping difficulty per
+  lesson, each filed under the course in order.
 - **`lingochunk-cards`** - builds native-grade flashcards with the `card.v1`
   kinds: verbatim transcript anchors, per-kind guidance (grammar =
   production cloze of the morpheme with a hint), and a quality rubric
@@ -292,6 +300,7 @@ lessons side by side under the episode's Lessons tab. See
 ```
 src/                                    the MCP server (TypeScript, stdio)
 skills/lingochunk-lesson/               the coursebook lesson skill
+skills/lingochunk-course/               the multi-lesson course planner skill
 skills/lingochunk-cards/                the flashcard (card.v1) skill
 skills/lingochunk-discuss/              the "discuss an episode" skill
 skills/lingochunk-add-language/         the add-language / draft-translation skill
@@ -329,7 +338,7 @@ npm run validate:lesson -- <doc.json>   # validate a lesson.v1 document (Node 22
 
 `spec/openapi-public-v1.json` is the source contract; it is exported from the
 LingoChunk repo (`make generate-openapi-public`) and refreshed here on each API
-release. This copy was taken from LingoChunk commit `0db02377`.
+release. This copy was taken from LingoChunk commit `31c47289`.
 
 ### Live smoke test
 
