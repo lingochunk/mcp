@@ -79,7 +79,8 @@
           "position": 44,
           "speaker": "Jonas",
           "text": "Ich habe den ganzen Tag E-Mails geschrieben.",
-          "translation": "I wrote emails all day."
+          "translation": "I wrote emails all day.",
+          "highlights": [[4, 8], [32, 43]]
         }
       ]
     },
@@ -177,8 +178,10 @@
           "translation": "You cycled to work."
         },
         {
+          "position": 44,
           "text": "Ich {{1}} den ganzen Tag E-Mails geschrieben.",
-          "answers": [["habe"]]
+          "answers": [["habe"]],
+          "translation": "I wrote emails all day."
         }
       ]
     },
