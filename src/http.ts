@@ -120,7 +120,12 @@ async function handle(
   options: HttpServerOptions,
 ): Promise<void> {
   applyCors(res);
-  const path = new URL(req.url ?? "/", "http://localhost").pathname;
+  // Serve the MCP wire on both /mcp and / : deployed behind a path-stripping
+  // proxy (kamal-proxy --path-prefix /mcp strips by default), requests to
+  // https://host/mcp arrive here as "/"; run directly (docker -p), they
+  // arrive as "/mcp". Health likewise answers /health and /mcp/health.
+  const rawPath = new URL(req.url ?? "/", "http://localhost").pathname;
+  const path = rawPath === "/" ? "/mcp" : rawPath.replace(/^\/mcp\/health$/, "/health");
 
   if (req.method === "OPTIONS") {
     res.writeHead(204).end();

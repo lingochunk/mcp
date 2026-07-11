@@ -150,4 +150,22 @@ describe("hosted HTTP server", () => {
     const res = await fetch(new URL("/nope", mcpUrl));
     expect(res.status).toBe(404);
   });
+
+  it("serves the MCP wire at / too (path-stripping proxy) and health at /mcp/health", async () => {
+    // Behind kamal-proxy's --path-prefix /mcp (strip on by default), a client
+    // request to https://host/mcp reaches the server as "/".
+    const rootUrl = new URL("/", mcpUrl);
+    const res = await fetch(rootUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json, text/event-stream",
+      },
+      body: JSON.stringify({ jsonrpc: "2.0", method: "ping", id: 1 }),
+    });
+    expect(res.status).toBe(401); // reached the MCP handler (auth gate), not a 404
+
+    const health = await fetch(new URL("/mcp/health", mcpUrl));
+    expect(health.status).toBe(200);
+  });
 });
