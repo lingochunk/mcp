@@ -16,8 +16,8 @@ contributions (see [CONTRIBUTING.md](CONTRIBUTING.md)).
 
 ## What it gives an agent
 
-Twelve tools, each wrapping one public endpoint. The first seven are read-only;
-the last five write to your account.
+Eighteen tools, each wrapping one public endpoint. Nine read from your account;
+nine write to it.
 
 | Tool | Scope | What it does |
 |---|---|---|
@@ -33,8 +33,14 @@ the last five write to your account.
 | `export_anki_deck` | `decks:export` | Exports a deck to Anki `.apkg` (no LLM), polling internally; returns a download URL when ready. A deck with no linked episode can't be exported. |
 | `save_lesson` | `lessons:write` | Saves a lesson to your private library (100 max). Preferred: a structured `lesson.v1` document the app renders natively (Lessons tab on the episode, real audio, live word state, Ask AI); returns metadata + an `app_url`. Legacy: a self-contained HTML file (10 MB cap) opened via a short-lived view URL. |
 | `delete_lesson` | `lessons:write` | Permanently deletes one saved lesson by id (destructive; owner-scoped server-side). Mainly for iterating: re-saving creates a new lesson, so superseded drafts count against the 100-lesson cap. |
+| `list_languages` | `content:read` | An episode's target languages and how to add more: the fan-out group so far (each with its own submission id + status), `available_targets` (ordinary Groq targets), `simplify_targets` (leveled same-language codes like `de-a2`) and in-progress drafts. |
+| `get_translation_source` | `content:read` | Pages the primary's sentences to translate yourself: source text, the pivot-language gloss per sentence and per token (which fixes each word's sense). Feeds the draft flow. |
+| `add_language` | `translations:write` | Fans an episode out into 1-10 extra **ordinary** target languages server-side (Groq, no tokens of yours); returns a job per language. Leveled same-language codes are rejected here - use the draft flow. |
+| `put_language_translations` | `translations:write` | Uploads a batch (1-100) of agent-written draft sentences (whole-sentence translation + one meaning per token) for a target or leveled language; returns per-sentence rejections to repair. |
+| `commit_language` | `translations:write` | Validates a complete draft and applies it, minting the sibling deck; polls the job and returns the new submission id when ready. |
+| `discard_language_draft` | `translations:write` | Deletes the in-progress draft rows for a language (destructive; never a committed sibling). |
 
-Plus three skills:
+Plus four skills:
 
 - **`lingochunk-lesson`** - composes a coursebook-style `lesson.v1` document
   (listen, text, vocabulary, one grammar point, graded exercises, review)
@@ -46,15 +52,21 @@ Plus three skills:
   distilled from the known failure modes of AI-generated cards.
 - **`lingochunk-discuss`** - a lighter, conversational "talk me through this
   episode" workflow.
+- **`lingochunk-add-language`** - adds another language to one of your episodes
+  as a new sibling deck: either the server-side Groq fan-out for an ordinary
+  target, or an agent-supplied translation you write sentence by sentence and
+  commit - the only way to build a leveled same-language deck (e.g.
+  "German (A2)", German audio glossed in simpler A2 German).
 
 ## Prerequisites
 
 - Node.js >= 18.
 - A LingoChunk **personal access token**: in LingoChunk, open Settings -> API
   access, create a token, and grant the scopes you need (`vocab:read` +
-  `content:read` cover the read tools; add `cards:write`, `decks:export` and
-  `lessons:write` for the write tools). The token is shown once and starts with
-  `lcp_`. The 403 errors from the tools name the exact scope you are missing.
+  `content:read` cover the read tools; add `cards:write`, `decks:export`,
+  `lessons:write` and `translations:write` for the write tools). The token is
+  shown once and starts with `lcp_`. The 403 errors from the tools name the
+  exact scope you are missing.
 
 ## Use it
 
@@ -220,6 +232,7 @@ src/                                    the MCP server (TypeScript, stdio)
 skills/lingochunk-lesson/               the coursebook lesson skill
 skills/lingochunk-cards/                the flashcard (card.v1) skill
 skills/lingochunk-discuss/              the "discuss an episode" skill
+skills/lingochunk-add-language/         the add-language / draft-translation skill
 skills/*/examples/                      example lesson.v1 documents (CI-validated)
 docs/skill-authoring.md                 how to write a new skill
 docs/skill-template.md                  SKILL.md starting point
