@@ -3,7 +3,7 @@
   "info": {
     "title": "LingoChunk Public API",
     "description": "The LingoChunk public API. Read your FSRS-graded vocabulary, look words up, browse your library, pull sliced transcripts and native audio, search your listening history, and cut audio clips.\n\nWrite, too: upload audio recordings for processing (optionally publishing them into a collection you own), add vocabulary and custom cards to your decks, export a deck to Anki, and save a generated HTML lesson to your library.\n\nAuthenticate with a personal access token created in your account settings: send it as `Authorization: Bearer lcp_...`. Each endpoint requires a scope, granted to the token at creation.",
-    "version": "1.4"
+    "version": "1.5"
   },
   "servers": [
     {

@@ -16,8 +16,8 @@ contributions (see [CONTRIBUTING.md](CONTRIBUTING.md)).
 
 ## What it gives an agent
 
-Twenty-two tools, each wrapping one public endpoint. Ten read from your account;
-twelve write to it.
+Twenty-four tools, each wrapping one public endpoint. Twelve read from your
+account; twelve write to it.
 
 | Tool | Scope | What it does |
 |---|---|---|
@@ -32,6 +32,8 @@ twelve write to it.
 | `add_card` | `cards:write` | Adds a card to your review queue (FSRS, starts new). Preferred: the `card.v1` kinds (`word`, `phrase`, `collocation`, `idiom`, `chunk`, `grammar`, `cloze`, `contrast`, `qa`, `production`) anchored to a verbatim transcript sentence - the server derives the highlight/blur painting and native-audio clip, so the card matches the app's own. Legacy: `kind=vocab` from your vocabulary, or `kind=custom` front/back. Omit `deck_id` to use the deck for the card's own submission. |
 | `export_anki_deck` | `decks:export` | Exports a deck to Anki `.apkg` (no LLM), polling internally; returns a download URL when ready. A deck with no linked episode can't be exported. |
 | `save_lesson` | `lessons:write` | Saves a lesson to your private library (100 max). Preferred: a structured `lesson.v1` document the app renders natively (Lessons tab on the episode, real audio, live word state, Ask AI); returns metadata + an `app_url`. Legacy: a self-contained HTML file (10 MB cap) opened via a short-lived view URL. |
+| `list_lessons` | `lessons:write` | Your saved lessons, newest first (id, title, language, format, source episode), cursor-paginated - for finding ids and seeing what already exists. |
+| `get_lesson` | `lessons:write` | Reads back a saved `lesson.v1` document by id. Closes the revision loop: lessons are immutable, so revise = read -> save new -> delete old. |
 | `delete_lesson` | `lessons:write` | Permanently deletes one saved lesson by id (destructive; owner-scoped server-side). Mainly for iterating: re-saving creates a new lesson, so superseded drafts count against the 100-lesson cap. |
 | `list_languages` | `content:read` | An episode's target languages and how to add more: the fan-out group so far (each with its own submission id + status), `available_targets` (ordinary Groq targets), `simplify_targets` (leveled same-language codes like `de-a2`) and in-progress drafts. |
 | `get_translation_source` | `content:read` | Pages the primary's sentences to translate yourself: source text, the pivot-language gloss per sentence and per token (which fixes each word's sense). Feeds the draft flow. |
