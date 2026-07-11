@@ -3,7 +3,7 @@
   "info": {
     "title": "LingoChunk Public API",
     "description": "The LingoChunk public API. Read your FSRS-graded vocabulary, look words up, browse your library, pull sliced transcripts and native audio, search your listening history, and cut audio clips.\n\nWrite, too: upload audio recordings for processing (optionally publishing them into a collection you own), add vocabulary and custom cards to your decks, export a deck to Anki, and save a generated HTML lesson to your library.\n\nAuthenticate with a personal access token created in your account settings: send it as `Authorization: Bearer lcp_...`. Each endpoint requires a scope, granted to the token at creation.",
-    "version": "1.3"
+    "version": "1.4"
   },
   "servers": [
     {
@@ -2911,6 +2911,446 @@
           "content:read"
         ]
       }
+    },
+    "/api/v1/submissions/{submission_id}/annotations": {
+      "get": {
+        "tags": [
+          "public-v1"
+        ],
+        "summary": "List Annotations",
+        "description": "Every creator annotation on a lesson you own, plus the per-lesson cap so\nyou can budget (``count`` vs ``max_annotations``). Each carries ``stale``:\nthe sentence was edited under the anchor, so the app hides the tint but\nkeeps the note. Ordered by sentence, then span start.\n\n**Requires scope:** `content:read`",
+        "operationId": "list_annotations_api_v1_submissions__submission_id__annotations_get",
+        "parameters": [
+          {
+            "name": "submission_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Submission Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnnotationListV1"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found or not accessible",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorV1"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid API token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorV1"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The token lacks the scope this endpoint requires",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorV1"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded. The `Retry-After` response header gives the number of seconds to wait.",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds to wait before retrying",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorV1"
+                }
+              }
+            }
+          }
+        },
+        "x-required-scopes": [
+          "content:read"
+        ]
+      },
+      "post": {
+        "tags": [
+          "public-v1"
+        ],
+        "summary": "Create Annotation",
+        "description": "Create a creator annotation on a sentence span (or the whole sentence).\nOwner + creator tier only. Offsets are UNICODE CODE-POINT offsets into the\nsentence ``display`` from GET /transcript; the response echoes the server's\n``selected_text`` snapshot - VERIFY it equals the span you intended and\ndelete + recreate on mismatch. Fresh rows are never stale.\n\n**Requires scope:** `annotations:write`",
+        "operationId": "create_annotation_api_v1_submissions__submission_id__annotations_post",
+        "parameters": [
+          {
+            "name": "submission_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Submission Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateAnnotationV1"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnnotationV1"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request parameters",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorV1"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found or not accessible",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorV1"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict; the ErrorV1 `code` names the case",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorV1"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid API token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorV1"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The token lacks the scope this endpoint requires",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorV1"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded. The `Retry-After` response header gives the number of seconds to wait.",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds to wait before retrying",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorV1"
+                }
+              }
+            }
+          }
+        },
+        "x-required-scopes": [
+          "annotations:write"
+        ]
+      }
+    },
+    "/api/v1/submissions/{submission_id}/annotations/{annotation_id}": {
+      "patch": {
+        "tags": [
+          "public-v1"
+        ],
+        "summary": "Update Annotation",
+        "description": "Replace an annotation's note. Owner + creator tier only. 404 when the\nannotation is missing or belongs to another submission; staleness is\nrecomputed against the current sentence display.\n\n**Requires scope:** `annotations:write`",
+        "operationId": "update_annotation_api_v1_submissions__submission_id__annotations__annotation_id__patch",
+        "parameters": [
+          {
+            "name": "submission_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Submission Id"
+            }
+          },
+          {
+            "name": "annotation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Annotation Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateAnnotationV1"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnnotationV1"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request parameters",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorV1"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found or not accessible",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorV1"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid API token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorV1"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The token lacks the scope this endpoint requires",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorV1"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded. The `Retry-After` response header gives the number of seconds to wait.",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds to wait before retrying",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorV1"
+                }
+              }
+            }
+          }
+        },
+        "x-required-scopes": [
+          "annotations:write"
+        ]
+      },
+      "delete": {
+        "tags": [
+          "public-v1"
+        ],
+        "summary": "Delete Annotation",
+        "description": "Delete a creator annotation. Owner + creator tier only. Returns a JSON\nbody (not 204) so the MCP client can confirm the id it removed. 404 when\nthe annotation is missing or belongs to another submission.\n\n**Requires scope:** `annotations:write`",
+        "operationId": "delete_annotation_api_v1_submissions__submission_id__annotations__annotation_id__delete",
+        "parameters": [
+          {
+            "name": "submission_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Submission Id"
+            }
+          },
+          {
+            "name": "annotation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Annotation Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeleteAnnotationResultV1"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found or not accessible",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorV1"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid API token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorV1"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The token lacks the scope this endpoint requires",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorV1"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded. The `Retry-After` response header gives the number of seconds to wait.",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds to wait before retrying",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorV1"
+                }
+              }
+            }
+          }
+        },
+        "x-required-scopes": [
+          "annotations:write"
+        ]
+      }
     }
   },
   "components": {
@@ -3082,6 +3522,129 @@
         ],
         "title": "AddLanguagesResultV1",
         "description": "Result of triggering the Groq fan-out for a set of targets."
+      },
+      "AnnotationListV1": {
+        "properties": {
+          "annotations": {
+            "items": {
+              "$ref": "#/components/schemas/AnnotationV1"
+            },
+            "type": "array",
+            "title": "Annotations",
+            "description": "Annotations, ordered by sentence then char_start"
+          },
+          "count": {
+            "type": "integer",
+            "title": "Count",
+            "description": "How many annotations this lesson already has"
+          },
+          "max_annotations": {
+            "type": "integer",
+            "title": "Max Annotations",
+            "description": "The per-lesson cap; budget against count, never carpet-bomb"
+          }
+        },
+        "type": "object",
+        "required": [
+          "annotations",
+          "count",
+          "max_annotations"
+        ],
+        "title": "AnnotationListV1",
+        "description": "Every creator annotation on one of your lessons, plus the budget."
+      },
+      "AnnotationV1": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id",
+            "description": "Annotation id (use to update/delete)"
+          },
+          "sentence_id": {
+            "type": "integer",
+            "title": "Sentence Id",
+            "description": "The sentence this note anchors to (from GET /transcript)"
+          },
+          "char_start": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Char Start",
+            "description": "Span start as a code-point offset into the sentence display; null (with char_end) for a whole-sentence note"
+          },
+          "char_end": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Char End",
+            "description": "Span end (exclusive) code-point offset; null for a whole-sentence note"
+          },
+          "selected_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Selected Text",
+            "description": "The server's snapshot of display[char_start:char_end] at create time. VERIFY this equals the span you intended; delete + recreate if it drifted (UTF-16 vs code-point offset mismatch). Null for a whole-sentence note."
+          },
+          "note": {
+            "type": "string",
+            "title": "Note",
+            "description": "The creator's markdown note"
+          },
+          "stale": {
+            "type": "boolean",
+            "title": "Stale",
+            "description": "True when the sentence was edited after the note was made, so the stored selected_text no longer matches the display slice; the app hides the tint but keeps the note"
+          },
+          "start_time": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Time",
+            "description": "Optional span audio start (seconds)"
+          },
+          "end_time": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End Time",
+            "description": "Optional span audio end (seconds)"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "sentence_id",
+          "note",
+          "stale"
+        ],
+        "title": "AnnotationV1",
+        "description": "A creator note anchored to a transcript sentence (a span, or the whole\nsentence). Owners see it as a tint + note; followers get it as a card."
       },
       "AudioSlice": {
         "properties": {
@@ -3648,6 +4211,80 @@
         "title": "CommitLanguageResultV1",
         "description": "The enqueued commit job for a drafted language."
       },
+      "CreateAnnotationV1": {
+        "properties": {
+          "sentence_id": {
+            "type": "integer",
+            "title": "Sentence Id",
+            "description": "Anchored sentence id (from GET /transcript)"
+          },
+          "char_start": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Char Start",
+            "description": "Span start code-point offset into display"
+          },
+          "char_end": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Char End",
+            "description": "Span end (exclusive) code-point offset"
+          },
+          "note": {
+            "type": "string",
+            "maxLength": 5000,
+            "title": "Note",
+            "description": "Markdown note (1..5000 chars)"
+          },
+          "start_time": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Time",
+            "description": "Optional span audio start (s)"
+          },
+          "end_time": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End Time",
+            "description": "Optional span audio end (s)"
+          }
+        },
+        "type": "object",
+        "required": [
+          "sentence_id",
+          "note"
+        ],
+        "title": "CreateAnnotationV1",
+        "description": "Create a creator annotation on a sentence span (or the whole sentence).\n\n``char_start``/``char_end`` are both present for a span note and both null\nfor a whole-sentence note (enforced server-side). Offsets are UNICODE\nCODE-POINT offsets into the sentence ``display`` from GET /transcript.\n``selected_text`` is never accepted from the client - the server snapshots\nthe display slice and echoes it back so you can verify the span."
+      },
       "DeckExportStartV1": {
         "properties": {
           "status": {
@@ -3786,6 +4423,27 @@
         ],
         "title": "DeckSummaryV1",
         "description": "One of the learner's study decks, for discovering deck ids to add to or\nexport."
+      },
+      "DeleteAnnotationResultV1": {
+        "properties": {
+          "deleted": {
+            "type": "boolean",
+            "title": "Deleted",
+            "description": "Always true on success"
+          },
+          "annotation_id": {
+            "type": "integer",
+            "title": "Annotation Id",
+            "description": "The id that was deleted"
+          }
+        },
+        "type": "object",
+        "required": [
+          "deleted",
+          "annotation_id"
+        ],
+        "title": "DeleteAnnotationResultV1",
+        "description": "Result of deleting a creator annotation."
       },
       "DeleteDraftResultV1": {
         "properties": {
@@ -5935,6 +6593,30 @@
             "type": "string",
             "title": "Lang",
             "description": "Language code of this sentence"
+          },
+          "sentence_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sentence Id",
+            "description": "Stable sentence id (survives split/merge). Pass as sentence_id when creating a creator annotation on this sentence; null for legacy transcripts that predate the sentences table."
+          },
+          "display": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display",
+            "description": "Display text with numbers spelled out - the exact string the server slices for annotation char offsets. Compute annotation char_start/char_end as UNICODE CODE-POINT offsets into this. Null for legacy transcripts."
           }
         },
         "type": "object",
@@ -6105,6 +6787,22 @@
         ],
         "title": "TranslationSourceV1",
         "description": "A page of source sentences for the agent to translate."
+      },
+      "UpdateAnnotationV1": {
+        "properties": {
+          "note": {
+            "type": "string",
+            "maxLength": 5000,
+            "title": "Note",
+            "description": "Replacement markdown note (1..5000)"
+          }
+        },
+        "type": "object",
+        "required": [
+          "note"
+        ],
+        "title": "UpdateAnnotationV1",
+        "description": "Replace an annotation's note (the only editable field)."
       },
       "ValidationError": {
         "properties": {
