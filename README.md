@@ -113,6 +113,26 @@ npm install     # installs deps and builds dist/ via the prepare script
 claude mcp add lingochunk --env LINGOCHUNK_TOKEN=lcp_... -- node /absolute/path/to/lingochunk-mcp/dist/index.js
 ```
 
+### Option C - hosted server (no install: claude.ai, ChatGPT, Le Chat, ...)
+
+The same server also runs hosted at `https://lingochunk.com/mcp` as a
+standard **remote MCP server** (Streamable HTTP). Nothing to install - paste
+the URL into any client that supports custom remote MCP servers, and
+authenticate with a personal access token (LingoChunk -> Settings -> API
+tokens) sent as a Bearer credential:
+
+| Client | Where |
+|---|---|
+| claude.ai (web/desktop/mobile, incl. Free) | Settings -> Connectors -> *Add custom connector* -> URL; put the token under Advanced settings |
+| Claude Code | `claude mcp add --transport http lingochunk https://lingochunk.com/mcp --header "Authorization: Bearer lcp_..."` |
+| ChatGPT (paid plans) | Settings -> enable *Developer mode* -> Apps -> "+" -> URL + your token |
+| Mistral Le Chat | *+ Add Connector* -> Custom MCP Connector -> URL (auth auto-detected) |
+| Perplexity (Pro/Max), Grok, Manus | add a custom connector/MCP server by URL + API key |
+
+Differences from the local server: `get_audio_clip` is unavailable (it writes
+files, which only makes sense on your own machine - use `get_audio_url`), and
+skills don't auto-load (paste a skill's `SKILL.md` as context instead).
+
 ## Use with other agents
 
 Nothing in the server is Claude-specific: it is a standard stdio MCP server,
@@ -221,6 +241,22 @@ when you want the update.
 
 The token is only ever sent as an `Authorization: Bearer` header to the
 configured origin; it is never written to disk or logged.
+
+### Hosted (remote) mode
+
+`node dist/index.js --http` serves the same tools over Streamable HTTP for
+remote MCP clients (see Option C). The process is stateless and multi-user:
+`LINGOCHUNK_TOKEN` is not read - every request must carry its own
+`Authorization: Bearer lcp_...` header, which is forwarded verbatim to the
+API (the API stays the sole authority; the server stores nothing). A
+`Dockerfile` is included.
+
+| Variable | Required | Default | Meaning |
+|---|---|---|---|
+| `LINGOCHUNK_MCP_PORT` | no | `8100` | Listen port (`PORT` honoured as fallback). |
+| `LINGOCHUNK_BASE_URL` | no | `https://lingochunk.com` | API origin; co-located deployments should point at the loopback origin. |
+
+Endpoints: `POST /mcp` (the MCP wire), `GET /health` (liveness).
 
 ## Building a lesson
 

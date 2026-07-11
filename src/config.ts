@@ -13,6 +13,58 @@ export interface Config {
 
 const DEFAULT_BASE_URL = "https://lingochunk.com";
 
+/** Configuration for the hosted (Streamable HTTP) mode: no token here - each
+ *  request carries its own caller's Bearer credential. */
+export interface HttpConfig {
+  /** Base origin of the LingoChunk API the server proxies to. */
+  baseUrl: string;
+  /** TCP port to listen on. */
+  port: number;
+}
+
+const DEFAULT_HTTP_PORT = 8100;
+
+/**
+ * Build the hosted-mode config from environment variables.
+ *
+ * - LINGOCHUNK_BASE_URL     (optional) API origin; when co-located with the
+ *   API prefer the loopback origin (e.g. http://127.0.0.1:8000) to skip the
+ *   reverse proxy.
+ * - LINGOCHUNK_MCP_PORT     (optional) listen port, default 8100. PORT is
+ *   honoured as a fallback for PaaS conventions.
+ */
+export function loadHttpConfig(env: NodeJS.ProcessEnv = process.env): HttpConfig {
+  const baseUrl = validateBaseUrl(env.LINGOCHUNK_BASE_URL ?? DEFAULT_BASE_URL);
+  const rawPort = (env.LINGOCHUNK_MCP_PORT ?? env.PORT ?? "").trim();
+  const port = rawPort ? Number(rawPort) : DEFAULT_HTTP_PORT;
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    throw new Error(
+      `LINGOCHUNK_MCP_PORT must be an integer in 1-65535, got: ${rawPort}`,
+    );
+  }
+  return { baseUrl, port };
+}
+
+/** Normalise and validate an API origin, throwing a clear onboarding error. */
+function validateBaseUrl(raw: string): string {
+  const baseUrl = raw.replace(/\/+$/, "");
+  // Fail fast on a malformed origin rather than throwing an opaque error on the
+  // first request. A bare host like "localhost:8000" parses with a bogus scheme,
+  // so also require http(s).
+  let parsed: URL;
+  try {
+    parsed = new URL(baseUrl);
+  } catch {
+    throw new Error(`LINGOCHUNK_BASE_URL is not a valid URL: ${baseUrl}`);
+  }
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    throw new Error(
+      `LINGOCHUNK_BASE_URL must be an http(s) URL (e.g. https://lingochunk.com), got: ${baseUrl}`,
+    );
+  }
+  return baseUrl;
+}
+
 /**
  * Build the config from environment variables.
  *
@@ -35,24 +87,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     );
   }
 
-  const baseUrl = (env.LINGOCHUNK_BASE_URL ?? DEFAULT_BASE_URL).replace(
-    /\/+$/,
-    "",
-  );
-  // Fail fast on a malformed origin rather than throwing an opaque error on the
-  // first request. A bare host like "localhost:8000" parses with a bogus scheme,
-  // so also require http(s).
-  let parsed: URL;
-  try {
-    parsed = new URL(baseUrl);
-  } catch {
-    throw new Error(`LINGOCHUNK_BASE_URL is not a valid URL: ${baseUrl}`);
-  }
-  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
-    throw new Error(
-      `LINGOCHUNK_BASE_URL must be an http(s) URL (e.g. https://lingochunk.com), got: ${baseUrl}`,
-    );
-  }
+  const baseUrl = validateBaseUrl(env.LINGOCHUNK_BASE_URL ?? DEFAULT_BASE_URL);
 
   // Default to a private per-user cache dir rather than the world-readable
   // shared temp dir: clips are the user's own study audio, so they should not

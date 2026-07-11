@@ -305,11 +305,20 @@ async function commitAndPoll(
   }
 }
 
+/** Where the server runs relative to the user. "local": a stdio process on
+ *  the user's machine (files it writes are the user's files). "remote": a
+ *  hosted multi-user HTTP server, where writing to the local filesystem is
+ *  meaningless to the caller - so get_audio_clip is not offered and sibling
+ *  descriptions stop pointing at it. */
+export type ToolMode = "local" | "remote";
+
 export function registerTools(
   server: McpServer,
   client: LingoChunkClient,
   config: Config,
+  mode: ToolMode = "local",
 ): void {
+  const local = mode === "local";
   server.registerTool(
     "get_vocabulary",
     {
@@ -391,8 +400,8 @@ export function registerTools(
       description:
         "List the user's ready-to-study episodes (their own submissions plus " +
         "collections they follow), newest first. Cursor-paginated. Use the " +
-        "returned submission ids with get_transcript / get_audio_url / " +
-        "get_audio_clip.",
+        "returned submission ids with get_transcript / get_audio_url" +
+        (local ? " / get_audio_clip." : "."),
       inputSchema: {
         limit: z.number().int().min(1).max(200).optional(),
         cursor: z
@@ -435,8 +444,11 @@ export function registerTools(
       title: "Get audio URL",
       description:
         "Get a short-lived presigned URL to a submission's full native audio " +
-        "(supports HTTP Range). Use for streaming; for a durable snippet to " +
-        "embed in a lesson, use get_audio_clip instead.",
+        "(supports HTTP Range). " +
+        (local
+          ? "Use for streaming; for a durable snippet to embed in a lesson, " +
+            "use get_audio_clip instead."
+          : "Use it for streaming or to give the user a link they can play."),
       inputSchema: {
         submission_id: z.string().min(1).describe("The submission id."),
       },
@@ -486,6 +498,10 @@ export function registerTools(
     },
   );
 
+  // Remote mode never registers this tool: it saves to the *server's* disk,
+  // which the remote caller cannot read, and unmetered writes on a shared
+  // host would be an abuse vector besides.
+  if (local) {
   server.registerTool(
     "get_audio_clip",
     {
@@ -529,6 +545,7 @@ export function registerTools(
         });
       }),
   );
+  }
 
   // --- Write tools (phase 3) ----------------------------------------------
 
