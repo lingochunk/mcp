@@ -147,8 +147,20 @@ describe("tool registration", () => {
         "search_examples",
         "update_annotation",
         "validate_lesson",
+        "whats_possible",
       ].sort(),
     );
+  });
+});
+
+describe("whats_possible", () => {
+  it("returns the overview menu without any fetch", async () => {
+    const result = await call("whats_possible", {});
+    expect(result.isError).toBeFalsy();
+    const text = textOf(result);
+    expect(text).toContain("# What you can do with LingoChunk");
+    expect(text).toContain("get_authoring_guide");
+    expect(text.length).toBeGreaterThan(1000);
   });
 });
 
@@ -164,8 +176,8 @@ describe("get_authoring_guide", () => {
     expect(text).not.toContain("name: lingochunk-lesson");
   });
 
-  it("serves a distinct, non-trivial guide for each of the six topics", async () => {
-    const topics = ["lesson", "course", "cards", "annotations", "add-language", "discuss"];
+  it("serves a distinct, non-trivial guide for each of the seven topics", async () => {
+    const topics = ["overview", "lesson", "course", "cards", "annotations", "add-language", "discuss"];
     const bodies = new Set<string>();
     for (const topic of topics) {
       const text = textOf(await call("get_authoring_guide", { topic }));

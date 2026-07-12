@@ -129,6 +129,7 @@ describe("hosted HTTP server", () => {
           "lingochunk-course",
           "lingochunk-discuss",
           "lingochunk-lesson",
+          "lingochunk-overview",
         ].sort(),
       );
       // Descriptions come from the skill frontmatter, not empty.

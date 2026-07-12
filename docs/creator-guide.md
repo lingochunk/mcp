@@ -122,6 +122,12 @@ Scopes, if you use a token instead of the sign-in flow:
 
 Type this to your assistant:
 
+> "What can I do with LingoChunk?"
+
+It answers with the menu (the connection carries its own tour) and an
+example prompt for each area, and can expand any of them on request. Then
+try:
+
 > "List my LingoChunk library."
 
 If it answers with your episodes, you are ready. Everything below is a

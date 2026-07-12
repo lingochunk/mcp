@@ -500,6 +500,28 @@ export function registerTools(
   );
 
   server.registerTool(
+    "whats_possible",
+    {
+      title: "What you can do with LingoChunk",
+      description:
+        "The quick tour of this connection: the menu of what the user can " +
+        "ask for (talk through an episode, vocabulary checks, lessons, " +
+        "courses, flashcards + Anki export, creator notes, extra languages, " +
+        "publishing to an audience), one example prompt per area. CALL THIS " +
+        "when the user asks what they can do with LingoChunk, what is " +
+        "possible, how to get started, or for help in general - then answer " +
+        "SHORT (a line per area) and offer to go deeper on the area they " +
+        "pick (the full craft guides live behind get_authoring_guide). " +
+        "Read-only; needs no scope.",
+      inputSchema: {},
+    },
+    () =>
+      Promise.resolve({
+        content: [{ type: "text" as const, text: GUIDES.overview.body }],
+      }),
+  );
+
+  server.registerTool(
     "get_authoring_guide",
     {
       title: "Get an authoring guide",
@@ -512,8 +534,10 @@ export function registerTools(
         "('cards', before add_card), creator notes ('annotations', before " +
         "create_annotation), a translation / added language ('add-language', " +
         "before add_language or the draft flow), or a guided discussion " +
-        "('discuss'). Returns the guide markdown: anchoring rules, the " +
-        "block/kind menu, and worked recipes. Read-only; needs no scope.",
+        "('discuss'). Topic 'overview' is the what-can-I-do tour (same " +
+        "content as whats_possible). Returns the guide markdown: anchoring " +
+        "rules, the block/kind menu, and worked recipes. Read-only; needs " +
+        "no scope.",
       inputSchema: {
         topic: z
           .enum(GUIDE_TOPICS as unknown as [GuideTopic, ...GuideTopic[]])
@@ -521,8 +545,8 @@ export function registerTools(
             "Which authoring task: 'lesson' (lesson.v1 documents), 'course' " +
               "(a multi-lesson series), 'cards' (card.v1 flashcards), " +
               "'annotations' (creator notes), 'add-language' (translations / " +
-              "leveled same-language decks) or 'discuss' (guided episode " +
-              "discussion).",
+              "leveled same-language decks), 'discuss' (guided episode " +
+              "discussion) or 'overview' (the what-can-I-do tour).",
           ),
       },
     },

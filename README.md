@@ -22,12 +22,15 @@ required, everything happens by talking to an AI assistant.
 
 ## What it gives an agent
 
-Twenty-nine tools. Twelve read from your account; sixteen write to it; one
-(`get_authoring_guide`) serves the authoring craft guides so remote clients
-that never see the skills still compose good lessons, cards and annotations.
+Thirty tools. Twelve read from your account; sixteen write to it; two serve
+guidance: `whats_possible` answers "what can I do here?" with a short menu
+and an example prompt per area, and `get_authoring_guide` serves the full
+authoring craft guides so remote clients that never see the skills still
+compose good lessons, cards and annotations.
 
 | Tool | Scope | What it does |
 |---|---|---|
+| `whats_possible` | none | The quick tour: every area this connection covers (discuss, vocabulary, lessons, courses, cards, languages, creator notes, publishing), one example prompt each. The agent answers short and offers to go deeper per area. |
 | `get_vocabulary` | `vocab:read` | Your vocabulary, aggregated per word with FSRS maturity (known/learning/new/due). Filterable; incremental sync via `since` + `cursor` (additive-only, so full-resync periodically). |
 | `lookup_word` | `vocab:read` | One word: your own context plus a shared-lexicon gender/CEFR fallback. Grounds an LLM's guesses. |
 | `list_library` | `content:read` | Your ready-to-study episodes (own + followed collections), cursor-paginated. |
@@ -35,7 +38,7 @@ that never see the skills still compose good lessons, cards and annotations.
 | `get_audio_url` | `content:read` | A short-lived presigned URL to the full native audio (Range-capable). |
 | `search_examples` | `content:read` | Example sentences across your library, by word (`lemma`) or text (`q`). A capped sample, not exhaustive. |
 | `get_audio_clip` | `content:read` | Cuts a short native-audio snippet, **saves it to a local file**, and returns `{path, media_type, size_bytes}` for embedding in lessons. |
-| `get_authoring_guide` | none | Returns the full craft guide for `topic` (`lesson`, `course`, `cards`, `annotations`, `add-language`, `discuss`) - the same content as the bundled skills, embedded in the package so remote clients get it too. Call it before composing. |
+| `get_authoring_guide` | none | Returns the full craft guide for `topic` (`overview`, `lesson`, `course`, `cards`, `annotations`, `add-language`, `discuss`) - the same content as the bundled skills, embedded in the package so remote clients get it too. Call it before composing. |
 | `list_decks` | `cards:write` or `decks:export` | Your study decks with card counts, for picking a `deck_id` to add to or export. |
 | `add_card` | `cards:write` | Adds a card to your review queue (FSRS, starts new). Preferred: the `card.v1` kinds (`word`, `phrase`, `collocation`, `idiom`, `chunk`, `grammar`, `cloze`, `contrast`, `qa`, `production`) anchored to a verbatim transcript sentence - the server derives the highlight/blur painting and native-audio clip, so the card matches the app's own. Legacy: `kind=vocab` from your vocabulary, or `kind=custom` front/back. Omit `deck_id` to use the deck for the card's own submission. |
 | `export_anki_deck` | `decks:export` | Exports a deck to Anki `.apkg` (no LLM), polling internally; returns a download URL when ready. A deck with no linked episode can't be exported. |
@@ -58,8 +61,11 @@ that never see the skills still compose good lessons, cards and annotations.
 | `update_annotation` | `annotations:write` | Replaces one annotation's note in place (the anchor stays put). |
 | `delete_annotation` | `annotations:write` | Deletes one annotation (destructive); also how you fix a mis-anchored span before re-creating it. |
 
-Plus six skills:
+Plus seven skills:
 
+- **`lingochunk-overview`** - the "what can I do?" tour: a short menu of
+  every area (with an example prompt each) and instructions to answer
+  briefly, then expand whichever area the user picks.
 - **`lingochunk-lesson`** - composes a coursebook-style `lesson.v1` document
   (listen, text, vocabulary, one grammar point, graded exercises, review)
   from the tools above, filtering out words you already know; the app
@@ -308,6 +314,7 @@ lessons side by side under the episode's Lessons tab. See
 
 ```
 src/                                    the MCP server (TypeScript, stdio)
+skills/lingochunk-overview/             the "what can I do?" tour skill
 skills/lingochunk-lesson/               the coursebook lesson skill
 skills/lingochunk-course/               the multi-lesson course planner skill
 skills/lingochunk-cards/                the flashcard (card.v1) skill

@@ -14,6 +14,7 @@ import { fileURLToPath } from "node:url";
  *  the prompt name is `lingochunk-<skill>`); the skill dir is where the
  *  markdown lives. Keep this the single source of truth for both. */
 export const GUIDE_SOURCES: { topic: string; skill: string }[] = [
+  { topic: "overview", skill: "lingochunk-overview" },
   { topic: "lesson", skill: "lingochunk-lesson" },
   { topic: "course", skill: "lingochunk-course" },
   { topic: "cards", skill: "lingochunk-cards" },
