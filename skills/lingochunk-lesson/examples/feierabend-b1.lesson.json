@@ -80,7 +80,8 @@
           "speaker": "Jonas",
           "text": "Ich habe den ganzen Tag E-Mails geschrieben.",
           "translation": "I wrote emails all day.",
-          "highlights": [[4, 8], [32, 43]]
+          "highlights": [[4, 8], [32, 43]],
+          "note": "*haben*, nicht *sein*: schreiben ist keine Bewegung."
         }
       ]
     },
@@ -98,7 +99,8 @@
           "display": "der Feierabend",
           "meaning": "end of the working day",
           "cefr": "B1",
-          "position": 41
+          "position": 41,
+          "show_sentence": true
         },
         {
           "lemma": "aufstehen",

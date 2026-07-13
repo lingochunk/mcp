@@ -158,6 +158,17 @@ that omits them renders flat. These are hard rules, not suggestions:
   `dialogue` line that carries an instance of the lesson's grammar point MUST
   mark it with `highlights` (code-point ranges) so the pattern shows as gold
   marks. A dialogue with no highlights wastes the one grammar point.
+- **Show the word in its context when the context is the point.** A vocab
+  entry with `show_sentence: true` renders its anchor sentence (live
+  transcript text, the word marked) under the row - use it when the user asks
+  for words "in their sentences", for idioms/collocations where the
+  surrounding words carry the meaning, or in a vocabulary-led lesson; skip it
+  when a long glossary would drown the page. It requires `position`.
+- **Dialogue `note` is for the author's aside, never for content.** One short
+  line under a dialogue line (register, usage, a cross-reference to the
+  grammar point). It is your voice, not the transcript's - never put quoted
+  or translated sentence content in it (that is what `text`/`translation`
+  are for), and use it sparingly: a note on every line reads as clutter.
 
 ## The scaffold and the archetype menu
 
@@ -312,8 +323,13 @@ estimated_minutes?, blocks[<=40]}`.
 Blocks (`type` field): `section {title, subtitle?}` · `prose {text,
 style:"instruction"|"body"}` · `audio_slice {audio:{start,end}, label?}` ·
 `dialogue {lines:[{position, speaker?, text, translation?,
-highlights?:[[start,end],...]}]}` · `vocab {entries:[{lemma, pos?, display?,
-forms?, meaning, cefr?, position?}]}` · `grammar_box {title, explanation,
+highlights?:[[start,end],...], note?}]}` (`note` is a short authorial aside
+rendered under the line - register, usage, "this is the idiom from the
+title"; the author's voice, so it is NOT congruence-checked) · `vocab
+{entries:[{lemma, pos?, display?, forms?, meaning, cefr?, position?,
+show_sentence?}]}` (`show_sentence: true` renders the anchor sentence LIVE
+from the transcript under the row, the word marked - requires `position`) ·
+`grammar_box {title, explanation,
 evidence:[{position?, text, note}], merke?, achtung?}` · `exercise_mcq
 {title?, instruction?, prompt?, audio?, position?, options[2..5],
 correct:0-based index}` · `exercise_gap_fill {title?, instruction?, wordbank?,
@@ -335,9 +351,10 @@ section is where authoring policy makes some of these anchors mandatory.
 **Text formatting.** `prose.text` and `grammar_box.explanation` render a
 mini-Markdown subset in the app: `**bold**`, `*italic*`, backtick code,
 `- `/`* ` bullet lines, and blank-line paragraph breaks. Exercise
-`instruction` fields and `grammar_box.merke`/`achtung` render the inline
-marks only (no bullets or paragraphs). Every other text field (titles,
-prompts, options, vocab meanings, dialogue lines) is plain text. Headings,
+`instruction` fields, `grammar_box.merke`/`achtung` and dialogue line
+`note`s render the inline marks only (no bullets or paragraphs). Every
+other text field (titles, prompts, options, vocab meanings, dialogue
+lines) is plain text. Headings,
 links, tables, images and raw HTML are never rendered anywhere - they show
 as literal characters, so don't emit them.
 

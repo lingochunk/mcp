@@ -5199,6 +5199,20 @@
             "type": "array",
             "maxItems": 8,
             "title": "Highlights"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note",
+            "description": "Author's aside shown under the line"
           }
         },
         "additionalProperties": false,
@@ -5208,7 +5222,7 @@
           "text"
         ],
         "title": "DialogueLine",
-        "description": "One transcript sentence presented as a dialogue line.\n\n``position`` anchors the line to the stored sentence (the save route\nverifies ``text`` matches it, so a lesson cannot misattribute content to\nthe recording). ``highlights`` are [start, end) CODE-POINT ranges into\n``text`` for the amber pattern marks (both renderers treat them as code\npoints; supplementary-plane characters count as one). Ranges must not\noverlap - both renderers would otherwise duplicate the overlapped text."
+        "description": "One transcript sentence presented as a dialogue line.\n\n``position`` anchors the line to the stored sentence (the save route\nverifies ``text`` matches it, so a lesson cannot misattribute content to\nthe recording). ``highlights`` are [start, end) CODE-POINT ranges into\n``text`` for the amber pattern marks (both renderers treat them as code\npoints; supplementary-plane characters count as one). Ranges must not\noverlap - both renderers would otherwise duplicate the overlapped text.\n\n``note`` is a short authorial aside under the line (\"register: informal\",\n\"this is the idiom from the title\") - the author's voice, never quoted\ncontent, so it needs no congruence check. Renders inline mini-Markdown\nmarks (bold/italic/code) only, like ``grammar_box.merke``."
       },
       "DictationItem": {
         "properties": {
@@ -8363,6 +8377,12 @@
             ],
             "title": "Position",
             "description": "Anchor sentence in the transcript, when known"
+          },
+          "show_sentence": {
+            "type": "boolean",
+            "title": "Show Sentence",
+            "description": "Render the anchor sentence (live) under the row",
+            "default": false
           }
         },
         "additionalProperties": false,
@@ -8372,7 +8392,7 @@
           "meaning"
         ],
         "title": "VocabEntry",
-        "description": "One glossary word. FSRS state (new/due/known) is NEVER stored here -\nthe renderer resolves it live so flags stay truthful as the lesson ages."
+        "description": "One glossary word. FSRS state (new/due/known) is NEVER stored here -\nthe renderer resolves it live so flags stay truthful as the lesson ages.\n\n``show_sentence`` renders the anchor sentence's LIVE transcript text under\nthe row (the word in its real context), so it requires ``position``. Like\ndictation/shadow lines, nothing is copied into the document - the quote\nstays truthful as the transcript is edited, and the offline export omits\nit (live text is never copied into artifacts)."
       },
       "VocabularyEntryV1": {
         "properties": {
