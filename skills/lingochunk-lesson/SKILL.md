@@ -293,6 +293,15 @@ new_lemmas?[<=12]}`.
 `position?` in the reference is the SCHEMA shape (optional); the Anchoring
 section is where authoring policy makes some of these anchors mandatory.
 
+**Text formatting.** `prose.text` and `grammar_box.explanation` render a
+mini-Markdown subset in the app: `**bold**`, `*italic*`, backtick code,
+`- `/`* ` bullet lines, and blank-line paragraph breaks. Exercise
+`instruction` fields and `grammar_box.merke`/`achtung` render the inline
+marks only (no bullets or paragraphs). Every other text field (titles,
+prompts, options, vocab meanings, dialogue lines) is plain text. Headings,
+links, tables, images and raw HTML are never rendered anywhere - they show
+as literal characters, so don't emit them.
+
 Caps: 40 blocks, 30 dialogue lines, 20 vocab entries, 5 MCQ options, 10
 gap-fill items, 8 match pairs, 5 order items (3-12 segments each), 5 dictation
 items, 8 shadow items, 8 highlight spans per line, 1 MB serialized.
