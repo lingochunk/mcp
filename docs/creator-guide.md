@@ -246,8 +246,8 @@ can smuggle content into your channel.
 
 - **Draft privately, publish deliberately.** Iterate with the agent until
   the lesson is right, then publish the final version. A published lesson
-  can be replaced: ask the agent to read it back, revise, publish the new
-  one and delete the old.
+  can be revised in place: ask the agent to read it back and update it -
+  the lesson keeps its link, so nothing you have shared goes stale.
 - **Tell your audience where to look.** A published lesson lives at the
   episode's Lessons tab; the agent gives you the exact link. Put it in your
   show notes or video description.
@@ -415,11 +415,12 @@ schema; the pedagogy is steerable.
 versions land best when a learner slightly below your episode's level can
 follow them comfortably.
 
-**Iterate in drafts.** Lessons are immutable once saved; revising means
-saving a new one and deleting the old, and the agent handles that loop for
-you. Keep drafts private, publish winners, and ask the agent to clean up
-abandoned attempts (there is a 100-lesson cap per account, so hygiene
-matters).
+**Iterate in place.** The agent revises a saved lesson in place - same
+lesson, same link - so ask for changes as often as you like ("change §5 to
+a shorter dialogue" works: the app's Co-edit mode shows those § handles and
+refreshes live as the agent saves). Keep drafts private, publish winners,
+and ask the agent to clean up abandoned attempts (there is a 100-lesson cap
+per account, so hygiene matters).
 
 **Re-run, don't restart.** An episode can hold many lessons side by side,
 and each lesson records which skill built it. Adding a new lesson type to an

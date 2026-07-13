@@ -38,16 +38,21 @@ For every learner:
    renders natively: real-audio exercises, gap-fills, dictation, shadowing,
    one grammar point, an AI tutor, an offline worksheet download.
    Example: *"Build a B1 lesson from the first five minutes of episode 12."*
-4. **Build a course** (topic `course`) - a named, ordered series of lessons
+4. **Revise a lesson** (topic `lesson`) - edit a saved lesson IN PLACE
+   (same id and links): the app's Co-edit mode labels each block §1, §2, ...
+   and refreshes live, so the user points at a block and watches your edit
+   land within seconds.
+   Example: *"In my lesson, change §5 to a two-person dialogue."*
+5. **Build a course** (topic `course`) - a named, ordered series of lessons
    with a different grammar point per lesson and ramping difficulty.
    Example: *"Turn this 20-minute episode into a four-lesson course, A2 to
    B1."*
-5. **Make flashcards and export to Anki** (topic `cards`) - native-grade
+6. **Make flashcards and export to Anki** (topic `cards`) - native-grade
    cards anchored to verbatim sentences (highlight/blur painting, native
    audio clip), plus `.apkg` deck export.
    Example: *"Make cards for the idioms in episode 12, then export the deck
    to Anki."*
-6. **Add languages** (topic `add-language`) - fan an episode out into up to
+7. **Add languages** (topic `add-language`) - fan an episode out into up to
    ten more languages server-side, or hand-craft the translation sentence by
    sentence - including simplified same-language versions (e.g. German audio
    glossed in easier A2 German).
@@ -56,12 +61,12 @@ For every learner:
 
 For creators (per-account features):
 
-7. **Creator notes** (topic `annotations`) - short notes pinned to the exact
+8. **Creator notes** (topic `annotations`) - short notes pinned to the exact
    idioms, fixed phrases and cultural references in the transcript; followers
    see them as highlights with a note sheet, and as note cards.
    Example: *"Annotate the useful expressions in episode 12 for my
    students."*
-8. **Publish to an audience** (topic `lesson`) - lessons save private by
+9. **Publish to an audience** (topic `lesson`) - lessons save private by
    default; saving with visibility `public` surfaces one to everyone who can
    view the episode, e.g. followers of the creator's channel.
    Example: *"Build a lesson from episode 12 and publish it to my channel."*

@@ -98,6 +98,45 @@ the user to add the LingoChunk MCP server (see the plugin README) and stop.
    (it has no audio by design). Summarise what the lesson covers and which
    words it drills.
 
+## Revising a saved lesson
+
+Lessons are editable IN PLACE: `get_lesson` -> compose the change ->
+`update_lesson`. The lesson keeps its id, app_url, visibility and course, so
+never revise by save-new + delete-old.
+
+**The co-edit loop.** The app has a Co-edit mode for lesson owners: it labels
+every block with a § handle (§1, §2, ... - the 1-based block position) and
+live-refreshes while an agent edits. When the user pastes a lesson outline or
+says "change §5", they are in that loop: the § numbers are `update_lesson`'s
+`ops` block numbers, and the user SEES your edit land within seconds - so
+act, then confirm briefly; no need to re-describe the lesson.
+
+Workflow:
+
+1. `get_lesson` returns `{version, document}`. Treat `version` as OPAQUE -
+   echo it verbatim as `update_lesson`'s `base_version`, never parse or
+   reformat it (a Date round-trip truncates it and it will never match).
+2. Compose the revision against THAT read. Every rule in this guide applies
+   to edited blocks - verbatim transcript quotes, anchoring, one grammar
+   point. For a broad rewrite, `validate_lesson` the whole revised document
+   first; for surgical `ops`, the update re-validates server-side anyway.
+3. Prefer `ops` (replace/insert/delete by block number, plus `meta` for
+   title/subtitle/level/objectives) over a full `document` resend. Batch ALL
+   changes from one read into ONE call, ordered by DESCENDING block number -
+   ops apply sequentially, so editing top-down shifts the numbers under you.
+4. § numbers are only valid against the read they came from. After your own
+   successful update everything renumbers - use the returned `{version}` for
+   a chained edit, but re-read (`get_lesson`) before composing NEW block
+   references. The user's pasted outline is also a snapshot: before a
+   delete/replace, check the target block's type and content match what they
+   described, not just its number.
+5. On a `stale_document` error, the lesson changed under you (usually the
+   owner's own in-app edit). Re-read, re-apply your intent to the fresh
+   document, and never blind-retry the same call.
+6. Consolidate. Writes share a 60/hour budget with saves, and each update
+   re-renders the lesson for a watching owner - one thoughtful update beats
+   five drips.
+
 ## Anchoring (mandatory)
 
 The renderer's best features - inline play chips, deep links into Listen and

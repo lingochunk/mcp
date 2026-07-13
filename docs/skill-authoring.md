@@ -89,13 +89,15 @@ It is self-declared display metadata (the slug is schema-locked to a
 lowercase ASCII slug, max 80 chars); it grants nothing and must not be
 relied on for anything but display.
 
-### Documents are immutable
+### Revise in place, create deliberately
 
-Every `save_lesson` creates a NEW lesson; there is no update. That is a
-feature: an episode's Lessons tab lists every lesson saved against it, so
-your skill's output sits alongside other skills' lessons for the same
-episode. While iterating, delete abandoned attempts in the app (Settings ->
-Lessons) to stay under the 100-lesson cap.
+Every `save_lesson` creates a NEW lesson - an episode's Lessons tab lists
+every lesson saved against it, so your skill's output sits alongside other
+skills' lessons for the same episode. To REVISE an existing lesson, use
+`update_lesson` (in place: same id, same links, `base_version` from
+`get_lesson` guarding against concurrent edits) rather than saving a copy.
+While iterating on genuinely new attempts, delete abandoned ones in the app
+(Settings -> Lessons) to stay under the 100-lesson cap.
 
 ## Hard rules (every skill, non-negotiable)
 

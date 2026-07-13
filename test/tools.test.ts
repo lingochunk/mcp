@@ -115,7 +115,7 @@ function textOf(result: CallToolResult): string {
 }
 
 describe("tool registration", () => {
-  it("registers all twenty-nine tools", () => {
+  it("registers all thirty tools", () => {
     expect([...tools.keys()].sort()).toEqual(
       [
         "add_card",
@@ -146,6 +146,7 @@ describe("tool registration", () => {
         "save_lesson",
         "search_examples",
         "update_annotation",
+        "update_lesson",
         "validate_lesson",
         "whats_possible",
       ].sort(),
@@ -758,14 +759,19 @@ describe("write tools", () => {
     expect(JSON.parse(textOf(result))).toEqual({ lessons: [], next_cursor: null });
   });
 
-  it("get_lesson GETs the document by id (URL-encoded)", async () => {
-    mockFetch(jsonResponse({ format: "lesson.v1", title: "T", blocks: [] }));
+  it("get_lesson GETs the document by id and pairs it with the version token", async () => {
+    mockFetch(
+      jsonResponse(
+        { format: "lesson.v1", title: "T", blocks: [] },
+        200,
+        { "x-lesson-version": "2026-07-13T09:00:00.123456+00:00" },
+      ),
+    );
     const result = await call("get_lesson", { lesson_id: "l1/../x" });
     expect(lastUrl).toBe("https://api.test/api/v1/lessons/l1%2F..%2Fx/document");
     expect(JSON.parse(textOf(result))).toEqual({
-      format: "lesson.v1",
-      title: "T",
-      blocks: [],
+      version: "2026-07-13T09:00:00.123456+00:00",
+      document: { format: "lesson.v1", title: "T", blocks: [] },
     });
   });
 
@@ -774,6 +780,179 @@ describe("write tools", () => {
     const result = await call("get_lesson", { lesson_id: "html-one" });
     expect(textOf(result)).toContain("404");
     expect(textOf(result)).toContain("Lesson has no document");
+  });
+
+  it("update_lesson document mode PUTs the replacement with base_version", async () => {
+    mockFetch(
+      jsonResponse(
+        { id: "l1", title: "Rewritten", updated_at: "2026-07-13T10:00:00Z" },
+        200,
+        { "x-lesson-version": "2026-07-13T10:00:00+00:00" },
+      ),
+    );
+    const doc = { format: "lesson.v1", title: "Rewritten", blocks: [{}] };
+    const result = await call("update_lesson", {
+      lesson_id: "l1/../x",
+      base_version: "v-base",
+      document: doc,
+    });
+    expect(lastUrl).toBe("https://api.test/api/v1/lessons/l1%2F..%2Fx/document");
+    expect(lastInit.method).toBe("PUT");
+    expect(JSON.parse(String(lastInit.body))).toEqual({
+      document: doc,
+      base_version: "v-base",
+    });
+    expect(JSON.parse(textOf(result))).toEqual({
+      version: "2026-07-13T10:00:00+00:00",
+      lesson: { id: "l1", title: "Rewritten", updated_at: "2026-07-13T10:00:00Z" },
+    });
+  });
+
+  it("update_lesson ops mode patches the fresh document sequentially", async () => {
+    const stored = {
+      format: "lesson.v1",
+      title: "T",
+      blocks: [
+        { type: "section", title: "A" },
+        { type: "prose", text: "old" },
+        { type: "review" },
+      ],
+    };
+    mockFetchSequence([
+      jsonResponse(stored, 200, { "x-lesson-version": "v1" }),
+      jsonResponse({ id: "l1", title: "T" }, 200, {
+        "x-lesson-version": "v2",
+      }),
+    ]);
+    // Descending block order: delete §3, replace §2, insert a new §1.
+    const result = await call("update_lesson", {
+      lesson_id: "l1",
+      base_version: "v1",
+      ops: [
+        { action: "delete", block: 3 },
+        { action: "replace", block: 2, value: { type: "prose", text: "new" } },
+        { action: "insert", block: 1, value: { type: "prose", text: "intro" } },
+      ],
+    });
+    const putBody = JSON.parse(String(lastInit.body));
+    expect(putBody.base_version).toBe("v1");
+    expect(putBody.document.blocks).toEqual([
+      { type: "prose", text: "intro" },
+      { type: "section", title: "A" },
+      { type: "prose", text: "new" },
+    ]);
+    expect(JSON.parse(textOf(result)).version).toBe("v2");
+  });
+
+  it("update_lesson meta edits set and null-clear lesson-level fields", async () => {
+    const stored = {
+      format: "lesson.v1",
+      title: "Old title",
+      subtitle: "Old strap",
+      blocks: [{ type: "review" }],
+    };
+    mockFetchSequence([
+      jsonResponse(stored, 200, { "x-lesson-version": "v1" }),
+      jsonResponse({ id: "l1" }, 200, { "x-lesson-version": "v2" }),
+    ]);
+    await call("update_lesson", {
+      lesson_id: "l1",
+      base_version: "v1",
+      meta: { title: "New title", subtitle: null },
+    });
+    const putBody = JSON.parse(String(lastInit.body));
+    expect(putBody.document.title).toBe("New title");
+    expect("subtitle" in putBody.document).toBe(false);
+    expect(putBody.document.blocks).toEqual([{ type: "review" }]);
+  });
+
+  it("update_lesson ops mode refuses a stale base_version WITHOUT writing", async () => {
+    // Only ONE response mocked: a PUT after the version check would throw
+    // "unexpected extra fetch" and fail this test.
+    mockFetchSequence([
+      jsonResponse({ format: "lesson.v1", blocks: [] }, 200, {
+        "x-lesson-version": "v2-moved-on",
+      }),
+    ]);
+    const result = await call("update_lesson", {
+      lesson_id: "l1",
+      base_version: "v1-what-i-read",
+      ops: [{ action: "delete", block: 1 }],
+    });
+    expect(result.isError).toBe(true);
+    expect(textOf(result)).toContain("changed under you");
+    expect(textOf(result)).toContain("get_lesson again");
+  });
+
+  it("update_lesson surfaces the server's 409 stale_document remediation", async () => {
+    mockFetch(
+      jsonResponse(
+        { detail: "The lesson changed...", code: "stale_document" },
+        409,
+      ),
+    );
+    const result = await call("update_lesson", {
+      lesson_id: "l1",
+      base_version: "v-old",
+      document: { format: "lesson.v1", blocks: [{}] },
+    });
+    expect(result.isError).toBe(true);
+    expect(textOf(result)).toContain("changed under you");
+  });
+
+  it("update_lesson names the failing op and current length on bad bounds", async () => {
+    mockFetchSequence([
+      jsonResponse(
+        { format: "lesson.v1", blocks: [{ type: "review" }] },
+        200,
+        { "x-lesson-version": "v1" },
+      ),
+    ]);
+    const result = await call("update_lesson", {
+      lesson_id: "l1",
+      base_version: "v1",
+      ops: [{ action: "replace", block: 5, value: { type: "prose", text: "x" } }],
+    });
+    expect(result.isError).toBe(true);
+    expect(textOf(result)).toContain("ops[1]");
+    expect(textOf(result)).toContain("1 blocks");
+  });
+
+  it("update_lesson enforces the ops/document/meta shape rules", async () => {
+    const doc = { format: "lesson.v1", blocks: [{}] };
+    let result = await call("update_lesson", {
+      lesson_id: "l1",
+      base_version: "v1",
+      ops: [{ action: "delete", block: 1 }],
+      document: doc,
+    });
+    expect(textOf(result)).toContain("exactly one");
+    result = await call("update_lesson", {
+      lesson_id: "l1",
+      base_version: "v1",
+      document: doc,
+      meta: { title: "X" },
+    });
+    expect(textOf(result)).toContain("cannot combine");
+    result = await call("update_lesson", { lesson_id: "l1", base_version: "v1" });
+    expect(textOf(result)).toContain("Nothing to change");
+  });
+
+  it("update_lesson rejects a delete op carrying a value", async () => {
+    mockFetchSequence([
+      jsonResponse(
+        { format: "lesson.v1", blocks: [{ type: "review" }] },
+        200,
+        { "x-lesson-version": "v1" },
+      ),
+    ]);
+    const result = await call("update_lesson", {
+      lesson_id: "l1",
+      base_version: "v1",
+      ops: [{ action: "delete", block: 1, value: { type: "prose", text: "x" } }],
+    });
+    expect(result.isError).toBe(true);
+    expect(textOf(result)).toContain("forbidden for delete");
   });
 
   it("delete_lesson DELETEs by id (URL-encoded) and reports the deletion", async () => {

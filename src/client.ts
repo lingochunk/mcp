@@ -302,6 +302,43 @@ export class LingoChunkClient {
     return (await res.json()) as T;
   }
 
+  /** GET a JSON endpoint, also capturing one response header (e.g. the
+   *  lesson optimistic-concurrency token in X-Lesson-Version). */
+  private async getJsonWithHeader<T>(
+    path: string,
+    header: string,
+  ): Promise<{ data: T; header: string | null }> {
+    const res = await fetch(this.buildUrl(path), {
+      method: "GET",
+      headers: this.authHeaders("application/json"),
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    });
+    if (!res.ok) {
+      await this.raiseForStatus(res);
+    }
+    return { data: (await res.json()) as T, header: res.headers.get(header) };
+  }
+
+  /** PUT a JSON body, also capturing one response header. */
+  private async putJsonWithHeader<T>(
+    path: string,
+    body: unknown,
+    header: string,
+  ): Promise<{ data: T; header: string | null }> {
+    const headers = this.authHeaders("application/json");
+    headers["Content-Type"] = "application/json";
+    const res = await fetch(this.buildUrl(path), {
+      method: "PUT",
+      headers,
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    });
+    if (!res.ok) {
+      await this.raiseForStatus(res);
+    }
+    return { data: (await res.json()) as T, header: res.headers.get(header) };
+  }
+
   /** DELETE an endpoint; success is 204 with no body to parse. */
   private async deleteNoContent(path: string): Promise<void> {
     const res = await fetch(this.buildUrl(path), {
@@ -450,10 +487,36 @@ export class LingoChunkClient {
     return this.deleteNoContent(`/courses/${encodeURIComponent(courseId)}`);
   }
 
-  /** The stored lesson.v1 document. Owner-scoped server-side; 404 for HTML
+  /** The stored lesson.v1 document plus its optimistic-concurrency token
+   *  (the X-Lesson-Version response header; a caller echoes it verbatim as
+   *  an update's base_version). Owner-scoped server-side; 404 for HTML
    *  lessons (they have no document) and for foreign/unknown ids. */
-  getLessonDocument(lessonId: string): Promise<unknown> {
-    return this.getJson(`/lessons/${encodeURIComponent(lessonId)}/document`);
+  async getLessonDocument(
+    lessonId: string,
+  ): Promise<{ version: string | null; document: unknown }> {
+    const { data, header } = await this.getJsonWithHeader(
+      `/lessons/${encodeURIComponent(lessonId)}/document`,
+      "x-lesson-version",
+    );
+    return { version: header, document: data };
+  }
+
+  /** Replace a lesson.v1 document in place (owner-scoped; same id, same
+   *  app_url). base_version is the X-Lesson-Version token the edit is based
+   *  on - if the lesson changed since, the server answers 409 stale_document
+   *  instead of overwriting the other writer. Returns the refreshed lesson
+   *  metadata plus the NEW token for chained edits. */
+  async updateLesson(
+    lessonId: string,
+    document: unknown,
+    baseVersion: string,
+  ): Promise<{ version: string | null; lesson: unknown }> {
+    const { data, header } = await this.putJsonWithHeader(
+      `/lessons/${encodeURIComponent(lessonId)}/document`,
+      { document, base_version: baseVersion },
+      "x-lesson-version",
+    );
+    return { version: header, lesson: data };
   }
 
   /** Owner-scoped server-side: a foreign or unknown id is a 404, never a leak. */

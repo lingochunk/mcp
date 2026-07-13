@@ -3,7 +3,7 @@
   "info": {
     "title": "LingoChunk Public API",
     "description": "The LingoChunk public API. Read your FSRS-graded vocabulary, look words up, browse your library, pull sliced transcripts and native audio, search your listening history, and cut audio clips.\n\nWrite, too: upload audio recordings for processing (optionally publishing them into a collection you own), add vocabulary and custom cards to your decks, export a deck to Anki, and save a generated HTML lesson to your library.\n\nAuthenticate with a personal access token created in your account settings: send it as `Authorization: Bearer lcp_...`. Each endpoint requires a scope, granted to the token at creation.",
-    "version": "1.7"
+    "version": "1.8"
   },
   "servers": [
     {
@@ -1786,7 +1786,7 @@
           "public-v1"
         ],
         "summary": "Get Lesson Document Route",
-        "description": "Read back a native lesson.v1 document (owner only; 404 for HTML\nlessons, which have no document). Closes the loop for agents: lesson rows\nare immutable, so revising one = read the document, save the revision as\na new lesson, delete the old one. Without this route an agent could save\nand list lessons but never see what it (or an earlier session) wrote.\n\n**Requires scope:** `lessons:write`",
+        "description": "Read back a native lesson.v1 document (owner only; 404 for HTML\nlessons, which have no document). Closes the loop for agents: read the\ndocument, revise it, and PUT it back to the same lesson. Without this\nroute an agent could save and list lessons but never see what it (or an\nearlier session) wrote.\n\nThe ``X-Lesson-Version`` response header carries the lesson's\noptimistic-concurrency token; echo it verbatim as the update's\n``base_version`` so a concurrent edit is rejected (409 ``stale_document``)\ninstead of silently overwritten.\n\n**Requires scope:** `lessons:write`",
         "operationId": "get_lesson_document_route_api_v1_lessons__lesson_id__document_get",
         "parameters": [
           {
@@ -1812,6 +1812,138 @@
           },
           "404": {
             "description": "Not found or not accessible",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorV1"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid API token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorV1"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The token lacks the scope this endpoint requires",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorV1"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded. The `Retry-After` response header gives the number of seconds to wait.",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds to wait before retrying",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorV1"
+                }
+              }
+            }
+          }
+        },
+        "x-required-scopes": [
+          "lessons:write"
+        ]
+      },
+      "put": {
+        "tags": [
+          "public-v1"
+        ],
+        "summary": "Update Lesson Document Route",
+        "description": "Replace a native lesson.v1 document in place (owner only).\n\nThe full replacement document is validated exactly like a save (schema +\nreferences against the source submission) and overwrites the stored\nobject; the lesson keeps its id, visibility, course and creation time.\nThe document must keep its original ``source.submission_id`` (400\n``submission_mismatch`` otherwise) - a lesson on a different episode is a\nnew lesson. 409 ``lesson_not_document`` for HTML lessons, which have no\ndocument to edit.\n\nPass ``base_version`` (the ``X-Lesson-Version`` token this edit is based\non, echoed verbatim) to reject a concurrent edit with 409\n``stale_document`` instead of overwriting it; the response's\n``X-Lesson-Version`` header carries the NEW token for chained edits.\n\n**Requires scope:** `lessons:write`",
+        "operationId": "update_lesson_document_route_api_v1_lessons__lesson_id__document_put",
+        "parameters": [
+          {
+            "name": "lesson_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Lesson Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LessonUpdateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LessonUpdatedV1"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request parameters",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorV1"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found or not accessible",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorV1"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict; the ErrorV1 `code` names the case",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorV1"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request body exceeds the size cap",
             "content": {
               "application/json": {
                 "schema": {
@@ -5800,7 +5932,7 @@
           "explanation"
         ],
         "title": "GrammarBoxBlock",
-        "description": "The one-point-per-lesson rule box, wearing the Ask AI callout grammar:\nevidence rows (the breakdown), a Merke takeaway, an Achtung watch-out."
+        "description": "The one-point-per-lesson rule box, wearing the Ask AI callout grammar:\nevidence rows (the breakdown), a Merke takeaway, an Achtung watch-out.\n\n``explanation`` renders the full mini-Markdown subset (see ``ProseBlock``);\n``merke`` and ``achtung`` render inline marks (bold/italic/code) only."
       },
       "GrammarEvidence": {
         "properties": {
@@ -6270,6 +6402,19 @@
             "title": "Created At",
             "description": "When the lesson was saved"
           },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At",
+            "description": "When the lesson.v1 document was last edited in place; null when never edited since creation"
+          },
           "view_url": {
             "anyOf": [
               {
@@ -6604,6 +6749,210 @@
         "title": "LessonSource",
         "description": "Where the lesson's material comes from (one submission in v1).\n\nTimes reject inf/nan: canonical serialisation would turn them into null,\nsilently erasing the declared slice on re-read."
       },
+      "LessonUpdateRequest": {
+        "properties": {
+          "document": {
+            "$ref": "#/components/schemas/LessonDocumentV1",
+            "description": "The full replacement lesson.v1 document"
+          },
+          "base_version": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Version",
+            "description": "Optimistic-concurrency token: the lesson version this edit is based on, echoed verbatim from the X-Lesson-Version response header of the document GET (or a previous update). When set and the lesson has been edited since, the update is rejected with 409 stale_document instead of silently overwriting the other edit. Omit/null to skip the check (legacy last-write-wins)"
+          }
+        },
+        "type": "object",
+        "required": [
+          "document"
+        ],
+        "title": "LessonUpdateRequest",
+        "description": "Replace a lesson.v1 document in place (owner only).\n\nThe whole document is submitted and re-validated exactly like a save\n(schema + references against the source submission), then overwrites the\nstored object. The lesson keeps its id, visibility, course and creation\ntime - only the document (and the metadata denormalised from it) changes.\nThe document must keep its original ``source.submission_id``: re-pointing\na lesson at a different episode is a new lesson, not an edit. HTML lessons\nare not updatable (they have no document)."
+      },
+      "LessonUpdatedV1": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id",
+            "description": "Lesson id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title",
+            "description": "Lesson title"
+          },
+          "language": {
+            "type": "string",
+            "title": "Language",
+            "description": "Language (ISO 639-1)"
+          },
+          "format": {
+            "type": "string",
+            "title": "Format",
+            "description": "Stored format: 'html' or 'lesson.v1'",
+            "default": "html"
+          },
+          "submission_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Submission Id",
+            "description": "Source submission (lesson.v1 only)"
+          },
+          "level": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Level",
+            "description": "CEFR level, when known"
+          },
+          "estimated_minutes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Estimated Minutes",
+            "description": "Estimated study time in minutes, when known"
+          },
+          "generator_skill": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Generator Skill",
+            "description": "Self-declared slug of the skill that composed the lesson (from the document's 'generator' field; display metadata, lesson.v1 only)"
+          },
+          "visibility": {
+            "type": "string",
+            "title": "Visibility",
+            "description": "'private' (owner only) or 'public' (visible to everyone who can view the source submission)",
+            "default": "private"
+          },
+          "course_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Course Id",
+            "description": "Id of the course this lesson belongs to, if any"
+          },
+          "sequence": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sequence",
+            "description": "Ordering position within its course (ties break by created_at); null when the lesson is not in a course"
+          },
+          "course_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Course Title",
+            "description": "Title of the course this lesson belongs to (echoed on list responses so a client can group without a second call); null when uncoursed"
+          },
+          "size_bytes": {
+            "type": "integer",
+            "title": "Size Bytes",
+            "description": "Size of the stored artefact in bytes"
+          },
+          "source_submission_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Source Submission Ids",
+            "description": "Provenance submission ids"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At",
+            "description": "When the lesson was saved"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At",
+            "description": "When the lesson.v1 document was last edited in place; null when never edited since creation"
+          },
+          "app_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "App Url",
+            "description": "App URL of the native lesson"
+          },
+          "unknown_lemmas": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Unknown Lemmas",
+            "description": "Vocab/review lemmas the source submission does not know; they saved fine but lose their Words-tab crosslink (fix and re-save to restore it)"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "language",
+          "size_bytes",
+          "created_at"
+        ],
+        "title": "LessonUpdatedV1",
+        "description": "The update response: the lesson's refreshed metadata."
+      },
       "LessonV1": {
         "properties": {
           "id": {
@@ -6735,6 +7084,19 @@
             "format": "date-time",
             "title": "Created At",
             "description": "When the lesson was saved"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At",
+            "description": "When the lesson.v1 document was last edited in place; null when never edited since creation"
           }
         },
         "type": "object",
@@ -7135,7 +7497,7 @@
           "text"
         ],
         "title": "ProseBlock",
-        "description": "Instruction lines and short passages. Plain text only."
+        "description": "Instruction lines and short passages.\n\n``text`` renders through the app's mini-Markdown subset: ``**bold**``,\n``*italic*``, backtick code, ``- ``/``* `` bullet lines, and blank-line\nparagraph breaks. Headings, links, tables and raw HTML are NOT rendered -\nthey show as literal text. The same subset applies to\n``grammar_box.explanation``; exercise ``instruction`` fields and\n``grammar_box.merke``/``achtung`` render the inline marks only. All other\ntext fields (titles, prompts, options, meanings, dialogue) are plain text."
       },
       "PutTranslationsRequestV1": {
         "properties": {

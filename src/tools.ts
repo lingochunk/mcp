@@ -62,6 +62,12 @@ function errorResult(err: unknown): CallToolResult {
       text +=
         "\nYou are at the lesson limit; delete an old lesson in your LingoChunk " +
         "library (Settings) to make room.";
+    } else if (err.code === "stale_document") {
+      text +=
+        "\nThe lesson changed under you - most likely the owner edited it in " +
+        "the app. Call get_lesson again, re-apply your intent to the fresh " +
+        "document (block numbers may have shifted), and update with the new " +
+        "version token. Do not retry the same call.";
     } else if (err.status === 401) {
       text += "\nCheck LINGOCHUNK_TOKEN is a valid, un-revoked token (prefix lcp_).";
     } else if (err.status === 403) {
@@ -505,9 +511,10 @@ export function registerTools(
       title: "What you can do with LingoChunk",
       description:
         "The quick tour of this connection: the menu of what the user can " +
-        "ask for (talk through an episode, vocabulary checks, lessons, " +
-        "courses, flashcards + Anki export, creator notes, extra languages, " +
-        "publishing to an audience), one example prompt per area. CALL THIS " +
+        "ask for (talk through an episode, vocabulary checks, building and " +
+        "live-revising lessons, courses, flashcards + Anki export, creator " +
+        "notes, extra languages, publishing to an audience), one example " +
+        "prompt per area. CALL THIS " +
         "when the user asks what they can do with LingoChunk, what is " +
         "possible, how to get started, or for help in general - then answer " +
         "SHORT (a line per area) and offer to go deeper on the area they " +
@@ -932,8 +939,9 @@ export function registerTools(
         "course_id + optional sequence. Creators: visibility:'public' " +
         "publishes the lesson to everyone who can view the source episode " +
         "(e.g. followers of a collection it belongs to); it requires owning " +
-        "the episode and works for documents only. Requires the " +
-        "lessons:write scope.",
+        "the episode and works for documents only. To REVISE a lesson that " +
+        "already exists, use update_lesson (in-place, same id) - not " +
+        "save-new + delete-old. Requires the lessons:write scope.",
       inputSchema: {
         title: z
           .string()
@@ -1061,11 +1069,16 @@ export function registerTools(
       title: "Get a lesson document",
       description:
         "Read back a saved lesson.v1 document by id (ids from list_lessons " +
-        "or save_lesson's response). This closes the revision loop: lessons " +
-        "are immutable, so to revise one, get_lesson -> edit the document -> " +
-        "save_lesson (a NEW id) -> delete_lesson the superseded one. 404 for " +
-        "legacy HTML lessons - they have no document. Requires the " +
-        "lessons:write scope.",
+        "or save_lesson's response). Returns {version, document}: `version` " +
+        "is the lesson's concurrency token - echo it VERBATIM as " +
+        "update_lesson's base_version (never parse or reformat it; a " +
+        "JavaScript Date round-trip truncates it and it will never match " +
+        "again) - and `document` is the lesson.v1 body (pass the `document` " +
+        "field onward to validate_lesson/update_lesson, never the whole " +
+        "envelope). This opens the revision loop: get_lesson -> edit -> " +
+        "update_lesson revises IN PLACE, keeping the lesson's id, app_url, " +
+        "visibility and course. 404 for legacy HTML lessons - they have no " +
+        "document. Requires the lessons:write scope.",
       inputSchema: {
         lesson_id: z
           .string()
@@ -1078,6 +1091,216 @@ export function registerTools(
   );
 
   server.registerTool(
+    "update_lesson",
+    {
+      title: "Update a lesson in place",
+      description:
+        "Revise a saved lesson.v1 document IN PLACE - same id, same app_url, " +
+        "same visibility and course. This is how you act on an owner's " +
+        "revision requests (in the app's Co-edit mode they reference blocks " +
+        "as §N - those are the SAME 1-based block numbers `ops` uses). " +
+        "PREFERRED: pass `ops`, surgical block edits applied to the CURRENT " +
+        "stored document - replace/insert/delete by 1-based block number, " +
+        "plus optional `meta` for lesson-level fields. Ops apply " +
+        "SEQUENTIALLY: each op sees the block array as the previous op left " +
+        "it, so for multiple ops from one read, order them by DESCENDING " +
+        "block number to keep the numbers stable. Alternatively pass " +
+        "`document`, a full replacement (for rewrites); exactly one of " +
+        "ops/document, or meta alone. ALWAYS pass base_version, the token " +
+        "from the get_lesson (or update_lesson) response this edit is based " +
+        "on - if the lesson changed meanwhile the call fails cleanly " +
+        "(stale_document) instead of overwriting the other edit; then " +
+        "re-read and re-apply. The server re-validates the whole document " +
+        "exactly like a save (verbatim quotes, positions, audio windows). " +
+        "Returns {version, lesson}: the NEW token (for chained edits without " +
+        "re-reading) and the refreshed metadata. Prefer ONE consolidated " +
+        "update over many small ones: writes share a 60/hour budget and " +
+        "each save re-renders the lesson for a watching owner. Requires the " +
+        "lessons:write scope.",
+      inputSchema: {
+        lesson_id: z
+          .string()
+          .min(1)
+          .max(36)
+          .describe("The lesson to revise (id from list_lessons/get_lesson)."),
+        base_version: z
+          .string()
+          .min(1)
+          .describe(
+            "The version token this edit is based on, echoed VERBATIM from " +
+              "get_lesson/update_lesson's response. Guards against " +
+              "overwriting a concurrent edit.",
+          ),
+        ops: z
+          .array(
+            z.object({
+              action: z
+                .enum(["replace", "insert", "delete"])
+                .describe(
+                  "replace: swap the block at `block` for `value`. insert: " +
+                    "make `value` the new block number `block`, shifting the " +
+                    "rest down. delete: remove the block at `block`.",
+                ),
+              block: z
+                .number()
+                .int()
+                .min(1)
+                .describe(
+                  "1-based block number (the app's §N), positioned in " +
+                    "the array as the PREVIOUS ops left it.",
+                ),
+              value: z
+                .record(z.unknown())
+                .optional()
+                .describe(
+                  "The lesson.v1 block object (required for replace/insert; " +
+                    "forbidden for delete). The server validates it fully.",
+                ),
+            }),
+          )
+          .min(1)
+          .max(40)
+          .optional()
+          .describe(
+            "Surgical edits to the CURRENT stored document, applied in " +
+              "order. Batch all changes from one read into one call, " +
+              "ordered by descending block number.",
+          ),
+        document: z
+          .record(z.unknown())
+          .optional()
+          .describe(
+            "A full replacement lesson.v1 document (for rewrites). Exactly " +
+              "one of ops/document.",
+          ),
+        meta: z
+          .object({
+            title: z.string().min(1).max(255).optional(),
+            subtitle: z.string().max(255).nullable().optional(),
+            level: z
+              .enum(["A1", "A2", "B1", "B2", "C1", "C2"])
+              .nullable()
+              .optional(),
+            objectives: z.array(z.string().min(1).max(200)).max(5).optional(),
+            estimated_minutes: z
+              .number()
+              .int()
+              .min(1)
+              .max(240)
+              .nullable()
+              .optional(),
+          })
+          .optional()
+          .describe(
+            "Lesson-level field edits (combinable with ops, or alone). " +
+              "Explicit null clears an optional field; omitted fields are " +
+              "left as they are. Not combinable with document (edit the " +
+              "fields in the document instead).",
+          ),
+      },
+    },
+    async ({ lesson_id, base_version, ops, document, meta }) =>
+      runResult(async () => {
+        if (document !== undefined && ops !== undefined) {
+          return errorResult(
+            new Error("Pass exactly one of 'ops' or 'document', not both."),
+          );
+        }
+        if (document !== undefined && meta !== undefined) {
+          return errorResult(
+            new Error(
+              "'meta' cannot combine with 'document' - a full replacement " +
+                "already carries its own title/level/objectives.",
+            ),
+          );
+        }
+        if (document === undefined && ops === undefined && meta === undefined) {
+          return errorResult(
+            new Error("Nothing to change: pass 'ops', 'document' or 'meta'."),
+          );
+        }
+
+        // Full replacement: straight PUT; the base_version guard is server-side.
+        if (document !== undefined) {
+          return jsonResult(
+            await client.updateLesson(lesson_id, document, base_version),
+          );
+        }
+
+        // Surgical mode: patch the CURRENT stored document. The fresh read
+        // must still match base_version - ops were composed against that
+        // state, and applying them to anything newer would edit the wrong
+        // blocks silently.
+        const { version, document: current } =
+          await client.getLessonDocument(lesson_id);
+        if (version !== base_version) {
+          return errorResult(
+            new ApiError(
+              409,
+              "The lesson changed since the version this edit is based on.",
+              undefined,
+              "stale_document",
+            ),
+          );
+        }
+
+        const doc = { ...(current as Record<string, unknown>) };
+        if (meta !== undefined) {
+          for (const [key, val] of Object.entries(meta)) {
+            if (val === undefined) continue;
+            if (val === null) delete doc[key];
+            else doc[key] = val;
+          }
+        }
+        if (ops !== undefined) {
+          const blocks = [...((doc.blocks as unknown[]) ?? [])];
+          for (const [i, op] of ops.entries()) {
+            const ordinal = i + 1;
+            const max = op.action === "insert" ? blocks.length + 1 : blocks.length;
+            if (op.block > max) {
+              return errorResult(
+                new Error(
+                  `ops[${ordinal}] (${op.action} at block ${op.block}) is out ` +
+                    `of range: the document has ${blocks.length} blocks at ` +
+                    "this point in the sequence.",
+                ),
+              );
+            }
+            if (op.action === "delete") {
+              if (op.value !== undefined) {
+                return errorResult(
+                  new Error(`ops[${ordinal}]: 'value' is forbidden for delete.`),
+                );
+              }
+              blocks.splice(op.block - 1, 1);
+            } else {
+              if (op.value === undefined) {
+                return errorResult(
+                  new Error(
+                    `ops[${ordinal}]: 'value' is required for ${op.action}.`,
+                  ),
+                );
+              }
+              if (op.action === "replace") blocks[op.block - 1] = op.value;
+              else blocks.splice(op.block - 1, 0, op.value);
+            }
+          }
+          if (blocks.length === 0 || blocks.length > 40) {
+            return errorResult(
+              new Error(
+                `The edited document would have ${blocks.length} blocks; a ` +
+                  "lesson holds 1-40.",
+              ),
+            );
+          }
+          doc.blocks = blocks;
+        }
+
+        return jsonResult(await client.updateLesson(lesson_id, doc, base_version));
+      }),
+  );
+
+  server.registerTool(
     "delete_lesson",
     {
       title: "Delete a lesson",
@@ -1085,11 +1308,12 @@ export function registerTools(
         "Permanently delete ONE of the user's saved lessons (the stored " +
         "document and its metadata row). Destructive and not undoable: only " +
         "delete a lesson the user has explicitly named or has just asked to " +
-        "replace; never sweep lessons unprompted. Typical use: iterating on " +
-        "a lesson - re-saving always creates a NEW lesson, so delete the " +
-        "superseded draft (its id is in save_lesson's response) to stay " +
-        "under the 100-lesson cap. 404 means the id does not exist or is " +
-        "not the user's. Requires the lessons:write scope.",
+        "replace; never sweep lessons unprompted. NOTE: to revise a lesson " +
+        "you no longer delete it - update_lesson edits it in place, keeping " +
+        "its id and links. Delete is for lessons the user is done with " +
+        "(e.g. abandoned drafts crowding the 100-lesson cap). 404 means the " +
+        "id does not exist or is not the user's. Requires the lessons:write " +
+        "scope.",
       annotations: { destructiveHint: true, idempotentHint: true },
       inputSchema: {
         lesson_id: z
