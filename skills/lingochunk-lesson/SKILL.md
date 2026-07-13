@@ -250,8 +250,11 @@ Computing the windows from the sentence's transcript `start` S and `end` E
   subtract ~0.3 s from each computed `start` (floor at S) to avoid clipping
   the first syllable.
 
-Label each block with the words it contains, e.g. `"Just the ending:
-gemacht."` then `"…heute gemacht."` then the full sentence. The schema needs
+Set `show_words: true` on every rung: the app renders the exact words the
+window covers — live from the transcript, karaoke-highlighted as the rung
+plays — so the learner always SEES what to say. Keep `label` for the rung's
+INTENT ("Just the ending", "Extend the run-up", "The whole sentence"); never
+copy the words into the label, the display derives them. The schema needs
 `end > start` and `start >= 0`, and every window must sit inside the source
 slice.
 
@@ -273,8 +276,8 @@ Cued recall in pairs. For 3-5 target phrases from the slice, emit a `prose`
 (the L1 prompt + a one-line hint on how to say it) immediately followed by an
 `audio_slice` that plays the phrase from the real audio as the answer.
 Instruct the learner to cover the answer, say the German aloud, THEN play to
-check. Keep the answer slice's `label` NEUTRAL ("Play the answer") - printing
-the German would spoil the anticipation. Build the answer window from the
+check. Keep the answer slice's `label` NEUTRAL ("Play the answer") and leave
+`show_words` OFF - printing the words would spoil the anticipation. Build the answer window from the
 target sentence's `start`/`end` (a back-chain-style tail slice works if you
 want just the phrase). Order the pairs from easiest to hardest.
 
@@ -335,7 +338,7 @@ episode_title?}, generator?:{skill, version?}, objectives?[<=5],
 estimated_minutes?, blocks[<=40]}`.
 
 Blocks (`type` field): `section {title, subtitle?}` · `prose {text,
-style:"instruction"|"body"}` · `audio_slice {audio:{start,end}, label?}` ·
+style:"instruction"|"body"}` · `audio_slice {audio:{start,end}, label?, show_words?}` (show_words renders the covered words live, karaoke-highlighted - for back-chain rungs and phrase players; never for hidden answers) ·
 `dialogue {lines:[{position, speaker?, text, translation?,
 highlights?:[[start,end],...], note?}]}` (`note` is a short authorial aside
 rendered under the line - register, usage, "this is the idiom from the
