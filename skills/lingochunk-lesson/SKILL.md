@@ -182,7 +182,12 @@ that omits them renders flat. These are hard rules, not suggestions:
   line under a dialogue line (register, usage, a cross-reference to the
   grammar point). It is your voice, not the transcript's - never put quoted
   or translated sentence content in it (that is what `text`/`translation`
-  are for), and use it sparingly: a note on every line reads as clutter.
+  are for), and use it sparingly: a note on every line reads as clutter. A
+  note may carry an `example`/`example_translation` pair (the Assimil note
+  shape): a FRESH illustrative sentence you author - not quoted from the
+  transcript - with its translation, shown as an indented second line under
+  the note. The same pair is available on `audio_slice` `notes`; `example`
+  requires the note text, and `example_translation` requires `example`.
 
 ## The scaffold and the archetype menu
 
@@ -213,6 +218,7 @@ identical. The archetypes (recipes for the starred ones are below):
 | Sentence reorder * | `exercise_order` | word order / clause structure, every level |
 | Dictation * | `exercise_dictation` | native-audio dictation, listening precision |
 | Shadowing * | `exercise_shadow` | pronunciation & prosody, the differentiator |
+| Translate / reconstruct * | `exercise_translate` | active recall, the Assimil second wave, mid/high levels |
 | Production | `exercise_production` | active use, mid/high levels |
 
 **Which archetypes for which lesson** (grammar-point type x level -> pick from):
@@ -250,13 +256,13 @@ Computing the windows from the sentence's transcript `start` S and `end` E
   subtract ~0.3 s from each computed `start` (floor at S) to avoid clipping
   the first syllable.
 
-Set `show_words: true` on every rung: the app renders the exact words the
-window covers — live from the transcript, karaoke-highlighted as the rung
-plays — so the learner always SEES what to say. Keep `label` for the rung's
-INTENT ("Just the ending", "Extend the run-up", "The whole sentence"); never
-copy the words into the label, the display derives them. The schema needs
-`end > start` and `start >= 0`, and every window must sit inside the source
-slice.
+The reader is always-open, so the app renders the exact words each window
+covers - live from the transcript, karaoke-highlighted as the rung plays - by
+itself; you set no flag for this (`show_words` is deprecated and inert). Keep
+`label` for the rung's INTENT ("Just the ending", "Extend the run-up", "The
+whole sentence"); never copy the words into the label, the display derives
+them. The schema needs `end > start` and `start >= 0`, and every window must
+sit inside the source slice.
 
 ### Assimil passive wave
 
@@ -274,12 +280,14 @@ technique rather than a wall of text. Example prose:
 
 Cued recall in pairs. For 3-5 target phrases from the slice, emit a `prose`
 (the L1 prompt + a one-line hint on how to say it) immediately followed by an
-`audio_slice` that plays the phrase from the real audio as the answer.
-Instruct the learner to cover the answer, say the German aloud, THEN play to
-check. Keep the answer slice's `label` NEUTRAL ("Play the answer") and leave
-`show_words` OFF - printing the words would spoil the anticipation. Build the answer window from the
-target sentence's `start`/`end` (a back-chain-style tail slice works if you
-want just the phrase). Order the pairs from easiest to hardest.
+`audio_slice` that plays the phrase from the real audio as the answer. Set
+`listen_first: true` on that answer slice so its text starts BLURRED: the
+reader is always-open, so without this the words would show and spoil the
+anticipation. The learner covers the answer, says the target aloud, plays to
+check, THEN reveals the text with the layer control. Keep the answer slice's
+`label` NEUTRAL ("Play the answer"). Build the answer window from the target
+sentence's `start`/`end` (a back-chain-style tail slice works if you want just
+the phrase). Order the pairs from easiest to hardest.
 
 ### Minimal-pair / discrimination MCQ
 
@@ -330,6 +338,37 @@ product's core practice move inline in a lesson; use it to make a lesson end in
 real speaking. Pick 3-8 of the dialogue's best lines - the ones worth being
 able to say fluently - in the order they occur. Add `translation` per line.
 
+### Translate / reconstruct (the Assimil daily exercise)
+
+An `exercise_translate` with 1-6 `items`. It carries both Assimil's daily
+translate exercise and active-wave reconstruction: cue in one language, produce
+the other, compare with a model, replay the source. Two knobs and two item
+shapes:
+
+- `direction`: `target_to_meaning` (read the target sentence, produce the
+  meaning - comprehension) or `meaning_to_target` (read the meaning, produce
+  the target - active production, the harder second-wave move).
+- `response`: `self_check` (default; the learner grades themselves against the
+  model), `type`, `speak`, or `speak_then_type` (speak first, writing
+  optional - exactly Assimil's instruction).
+- ANCHORED item (`position` set): a live transcript sentence supplies the cue
+  (target_to_meaning) or the exact answer (meaning_to_target, diffed like
+  dictation). Nothing is copied into the document; `cue`/`model_answer` are
+  author OVERRIDES only (custom wording), and `source_positions` MUST be empty
+  because the anchor sentence IS the source.
+- RECOMBINATION item (no `position`): a FRESH sentence that recombines the
+  lesson's material, so it is NOT in the transcript. It REQUIRES its own `cue`
+  AND `model_answer` AND at least one `source_positions` entry naming the
+  transcript sentences its chunks came from, so an invented sentence stays
+  grounded and lintable.
+
+Scoring is deliberate: an item is marked all-or-nothing (1 point) ONLY when it
+is `meaning_to_target`, has a typed response (`type`/`speak_then_type`) AND is
+anchored - the diffable-exact case. Every other configuration is self-assessed
+and never shows a misleading binary mark. Use anchored items for reconstructing
+lines the learner has already met, recombination items for a fresh sentence
+built from the week's chunks; add a short `note` per item for a usage hint.
+
 ## The lesson.v1 document (quick reference)
 
 Top level: `{format:"lesson.v1", title, subtitle?, language,
@@ -338,11 +377,22 @@ episode_title?}, generator?:{skill, version?}, objectives?[<=5],
 estimated_minutes?, blocks[<=40]}`.
 
 Blocks (`type` field): `section {title, subtitle?}` · `prose {text,
-style:"instruction"|"body"}` · `audio_slice {audio:{start,end}, label?, show_words?}` (show_words renders the covered words live, karaoke-highlighted - for back-chain rungs and phrase players; never for hidden answers) ·
-`dialogue {lines:[{position, speaker?, text, translation?,
-highlights?:[[start,end],...], note?}]}` (`note` is a short authorial aside
+style:"instruction"|"body"|"culture"}` (style "culture" renders as a labelled
+culture-note callout, same mini-Markdown body) · `audio_slice {audio:{start,end},
+label?, listen_first?, notes?:[{position, quote?, text, example?,
+example_translation?}]}` (`listen_first: true` starts the text layer blurred for
+an anticipation / first-listen round, the reader being always-open otherwise;
+`show_words` is deprecated and inert; `notes` are numbered span-anchored
+footnotes, and a note's `example`/`example_translation` add a fresh example
+sentence with its translation as the indented second line) ·
+`dialogue {presentation?:"auto"|"parallel"|"conversation", lines:[{position,
+speaker?, text, translation?, literal?, highlights?:[[start,end],...], note?,
+note_quote?, example?, example_translation?}]}` (`note` is a short authorial aside
 rendered under the line - register, usage, "this is the idiom from the
-title"; the author's voice, so it is NOT congruence-checked) · `vocab
+title"; the author's voice, so it is NOT congruence-checked; `example`/
+`example_translation` add a fresh example sentence with its translation under the
+note - example requires note; `presentation` selects the renderer treatment only)
+· `vocab
 {entries:[{lemma, pos?, display?, forms?, meaning, cefr?, position?,
 show_sentence?}]}` (`show_sentence: true` renders the anchor sentence LIVE
 from the transcript under the row, the word marked - requires `position`) ·
@@ -358,7 +408,14 @@ items:[{position?, segments[3..12] in correct order, translation?}][1..5]}`
 (segments must reassemble the anchored sentence) · `exercise_dictation
 {title?, instruction?, items:[{position (REQUIRED), audio?:{start,end},
 translation?}][1..5]}` · `exercise_shadow {title?, instruction?,
-items:[{position (REQUIRED), translation?}][1..8]}` · `exercise_production
+items:[{position (REQUIRED), translation?}][1..8]}` · `exercise_translate
+{title?, instruction?, direction:"target_to_meaning"|"meaning_to_target",
+response?:"self_check"|"type"|"speak"|"speak_then_type",
+items:[{position?, cue?, model_answer?, source_positions?:[int], note?}][1..6]}`
+(anchored item (position set) uses the live sentence, cue/model_answer are
+overrides only and source_positions must be empty; recombination item (no
+position) REQUIRES cue + model_answer + >=1 source_positions provenance; scored
+only when meaning_to_target + typed + anchored) · `exercise_production
 {title?, instruction?, prompt, model_answer}` · `review {can_do?[<=5],
 new_lemmas?[<=12]}`.
 
@@ -377,7 +434,8 @@ as literal characters, so don't emit them.
 
 Caps: 40 blocks, 30 dialogue lines, 20 vocab entries, 5 MCQ options, 10
 gap-fill items, 8 match pairs, 5 order items (3-12 segments each), 5 dictation
-items, 8 shadow items, 8 highlight spans per line, 1 MB serialized.
+items, 8 shadow items, 6 translate items, 8 highlight spans per line, 1 MB
+serialized.
 
 The server is the validator of record (strict: unknown fields and block
 types are rejected). Audio is `[start,end)` seconds into the ORIGINAL
