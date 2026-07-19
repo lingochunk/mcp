@@ -128,6 +128,7 @@ describe("hosted HTTP server", () => {
           "lingochunk-cards",
           "lingochunk-course",
           "lingochunk-discuss",
+          "lingochunk-guided",
           "lingochunk-lesson",
           "lingochunk-overview",
           "lingochunk-skill-author",

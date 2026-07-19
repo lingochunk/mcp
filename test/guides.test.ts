@@ -16,11 +16,12 @@ const TOPICS: GuideTopic[] = [
   "annotations",
   "add-language",
   "discuss",
+  "guided",
   "skill-author",
 ];
 
 describe("embedded authoring guides", () => {
-  it("embeds all eight topics", () => {
+  it("embeds all nine topics", () => {
     expect([...GUIDE_TOPICS].sort()).toEqual([...TOPICS].sort());
     expect(GUIDE_SOURCES.map((s) => s.topic).sort()).toEqual(
       [...TOPICS].sort(),
@@ -44,6 +45,13 @@ describe("embedded authoring guides", () => {
     // A content marker unique to the enriched lesson skill, so a truncated or
     // wrong-file embed would fail rather than pass silently.
     expect(GUIDES.lesson.body).toContain("Anchoring (mandatory)");
+  });
+
+  it("the guided guide teaches the loop, not the pedagogy", () => {
+    // Markers unique to the loop-only guided skill: it names the loop tools and
+    // states plainly that the pedagogy arrives at runtime in the brief.
+    expect(GUIDES.guided.body).toContain("get_guided_writer_brief");
+    expect(GUIDES.guided.body).toContain("The pedagogy arrives at runtime");
   });
 
   // Drift guard: the committed src/generated/guides.ts must match what the

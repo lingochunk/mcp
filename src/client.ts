@@ -222,9 +222,22 @@ export function formatDetail(detail: unknown): string | undefined {
     // guided W3 convention): surface its human message, not the raw JSON, so
     // errorResult does not print the braces. Any other object is stringified.
     const message = (detail as { message?: unknown }).message;
-    if (typeof message === "string" && message.trim()) {
-      return message.trim();
+    const header = typeof message === "string" ? message.trim() : "";
+    // An invalid_document detail (submit_guided_lesson's 422) also carries an
+    // `errors` list of EVERY problem at once (the validate_lesson philosophy).
+    // Surface each on its own line so the agent can fix them all in one pass,
+    // never as a single "[object Object]".
+    const errors = (detail as { errors?: unknown }).errors;
+    if (Array.isArray(errors) && errors.length) {
+      const lines = errors
+        .map(formatDocumentError)
+        .filter((l): l is string => l !== undefined)
+        .map((l) => `- ${l}`);
+      if (lines.length) {
+        return [header || "The document is invalid.", ...lines].join("\n");
+      }
     }
+    if (header) return header;
     return truncate(safeStringify(detail));
   }
   return undefined;
@@ -257,6 +270,44 @@ function formatDetailItem(item: unknown): string | undefined {
     return truncate(safeStringify(item));
   }
   return undefined;
+}
+
+/** Render one invalid_document error into a readable line. Unlike a FastAPI
+ *  validation item (formatDetailItem) it keys on `message`, not `msg`, and
+ *  carries the reference-fault locators the lesson validator raises: a dotted
+ *  `loc` path for a schema fault, or `positions` / `audio_windows` for a
+ *  quote/range fault. Keeps the stable `code` up front so the agent can act on
+ *  it. */
+function formatDocumentError(item: unknown): string | undefined {
+  if (typeof item === "string") return item;
+  if (!item || typeof item !== "object") return undefined;
+  const rec = item as {
+    code?: unknown;
+    message?: unknown;
+    loc?: unknown;
+    positions?: unknown;
+    audio_windows?: unknown;
+  };
+  const code = typeof rec.code === "string" ? rec.code : undefined;
+  const message = typeof rec.message === "string" ? rec.message : undefined;
+  const locators: string[] = [];
+  if (Array.isArray(rec.loc)) {
+    const loc = rec.loc
+      .filter((p) => typeof p === "string" || typeof p === "number")
+      .join(".");
+    if (loc) locators.push(loc);
+  }
+  if (Array.isArray(rec.positions) && rec.positions.length) {
+    locators.push(`positions ${rec.positions.join(", ")}`);
+  }
+  if (Array.isArray(rec.audio_windows) && rec.audio_windows.length) {
+    locators.push(
+      `audio ${rec.audio_windows.map((w) => safeStringify(w)).join(", ")}`,
+    );
+  }
+  const head = [code, message].filter(Boolean).join(": ");
+  const body = head || truncate(safeStringify(item));
+  return locators.length ? `${body} (${locators.join("; ")})` : body;
 }
 
 /** Thin, typed client over the public `/api/v1` surface. One instance per
@@ -740,6 +791,43 @@ export class LingoChunkClient {
   getGuidedPath(submissionId: string): Promise<unknown> {
     return this.getJson(
       `/submissions/${encodeURIComponent(submissionId)}/guided`,
+    );
+  }
+
+  // --- Guided writer endpoints (phase G2) ---------------------------------
+
+  /** The writer brief for the NEXT unwritten guided section: the assembled
+   *  pack instructions, the lesson.v1 contract reference and the section's
+   *  materials (source sentences, plan entry, level, known lemmas). Read-only
+   *  and claims nothing. Guided conflicts arrive as a `{code, message}` detail:
+   *  409 plan_not_ready / path_complete / section_has_no_sentences. Requires
+   *  the guided:write scope (the brief carries the pack). */
+  getGuidedWriterBrief(submissionId: string): Promise<unknown> {
+    return this.getJson(
+      `/submissions/${encodeURIComponent(submissionId)}/guided/brief`,
+    );
+  }
+
+  /** Submit a composed lesson.v1 document into one guided section; the server
+   *  re-validates it against the section bounds and atomically attaches it.
+   *  `generator` names the writing skill, for provenance. 201 returns the
+   *  lesson summary + app_url + unknown_lemmas. Conflicts arrive as a
+   *  `{code, message}` detail: 409 section_not_next / generation_in_flight /
+   *  section_taken / plan_not_ready / section_has_no_sentences, 413
+   *  document_too_large, 422 invalid_document (with an `errors` list of every
+   *  problem), 429 guided_daily_limit (with Retry-After). Requires the
+   *  guided:write scope. */
+  submitGuidedLesson(
+    submissionId: string,
+    sectionIndex: number,
+    body: {
+      document: unknown;
+      generator?: { skill?: string; version?: string };
+    },
+  ): Promise<unknown> {
+    return this.postJson(
+      `/submissions/${encodeURIComponent(submissionId)}/guided/sections/${sectionIndex}/lesson`,
+      body,
     );
   }
 }

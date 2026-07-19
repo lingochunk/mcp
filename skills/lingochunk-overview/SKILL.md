@@ -47,12 +47,18 @@ For every learner:
    with a different grammar point per lesson and ramping difficulty.
    Example: *"Turn this 20-minute episode into a four-lesson course, A2 to
    B1."*
-6. **Make flashcards and export to Anki** (topic `cards`) - native-grade
+6. **Build a guided study path** (topic `guided`) - the app segments an
+   episode into ordered study sections and you write each part following the
+   server's runtime brief; the parts render natively like internally
+   generated ones, feeding the guided page and remembered progress. Planning
+   is server-side; the writing runs on this agent.
+   Example: *"Build a guided path over episode 12 and write the lessons."*
+7. **Make flashcards and export to Anki** (topic `cards`) - native-grade
    cards anchored to verbatim sentences (highlight/blur painting, native
    audio clip), plus `.apkg` deck export.
    Example: *"Make cards for the idioms in episode 12, then export the deck
    to Anki."*
-7. **Add languages** (topic `add-language`) - fan an episode out into up to
+8. **Add languages** (topic `add-language`) - fan an episode out into up to
    ten more languages server-side, or hand-craft the translation sentence by
    sentence - including simplified same-language versions (e.g. German audio
    glossed in easier A2 German).
@@ -61,12 +67,12 @@ For every learner:
 
 For creators (per-account features):
 
-8. **Creator notes** (topic `annotations`) - short notes pinned to the exact
+9. **Creator notes** (topic `annotations`) - short notes pinned to the exact
    idioms, fixed phrases and cultural references in the transcript; followers
    see them as highlights with a note sheet, and as note cards.
    Example: *"Annotate the useful expressions in episode 12 for my
    students."*
-9. **Publish to an audience** (topic `lesson`) - lessons save private by
+10. **Publish to an audience** (topic `lesson`) - lessons save private by
    default; saving with visibility `public` surfaces one to everyone who can
    view the episode, e.g. followers of the creator's channel.
    Example: *"Build a lesson from episode 12 and publish it to my channel."*

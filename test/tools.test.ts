@@ -115,7 +115,7 @@ function textOf(result: CallToolResult): string {
 }
 
 describe("tool registration", () => {
-  it("registers all thirty-two tools", () => {
+  it("registers all thirty-four tools", () => {
     expect([...tools.keys()].sort()).toEqual(
       [
         "add_card",
@@ -132,6 +132,7 @@ describe("tool registration", () => {
         "get_audio_url",
         "get_authoring_guide",
         "get_guided_path",
+        "get_guided_writer_brief",
         "get_lesson",
         "get_transcript",
         "get_translation_source",
@@ -147,6 +148,7 @@ describe("tool registration", () => {
         "put_language_translations",
         "save_lesson",
         "search_examples",
+        "submit_guided_lesson",
         "update_annotation",
         "update_lesson",
         "validate_lesson",
@@ -1711,5 +1713,165 @@ describe("guided path tools", () => {
     expect(lastUrl).toBe("https://api.test/api/v1/submissions/abc%2F1/guided");
     expect(lastInit.method).toBe("GET");
     expect(JSON.parse(textOf(result))).toEqual(body);
+  });
+});
+
+describe("guided writer tools", () => {
+  it("get_guided_writer_brief GETs /guided/brief and returns the JSON", async () => {
+    const body = {
+      section_index: 2,
+      focus: "grammar",
+      pack_version: "0.3.0",
+      instructions: "Write the section following this pack.",
+      contract: "lesson.v1 schema reference...",
+      materials: {
+        language: "de",
+        translation_language: "en",
+        level: "B1",
+        source: { submission_id: "abc/1", from_time: 30, to_time: 95 },
+        plan_entry: { index: 2, title: "Modal verbs" },
+        sentences: [
+          {
+            position: 5,
+            text: "Ich muss gehen.",
+            translation: "I have to go.",
+            speaker: "A",
+            start: 31.2,
+            end: 33.0,
+          },
+        ],
+        known_lemmas: ["ich", "gehen"],
+      },
+    };
+    mockFetch(jsonResponse(body));
+    const result = await call("get_guided_writer_brief", {
+      submission_id: "abc/1",
+    });
+    expect(lastUrl).toBe(
+      "https://api.test/api/v1/submissions/abc%2F1/guided/brief",
+    );
+    expect(lastInit.method).toBe("GET");
+    expect(JSON.parse(textOf(result))).toEqual(body);
+  });
+
+  it("get_guided_writer_brief surfaces a 409 plan_not_ready with its code", async () => {
+    mockFetch(
+      jsonResponse(
+        {
+          detail: {
+            code: "plan_not_ready",
+            message: "The guided path is not planned yet.",
+          },
+        },
+        409,
+      ),
+    );
+    const result = await call("get_guided_writer_brief", {
+      submission_id: "s1",
+    });
+    expect(result.isError).toBe(true);
+    const text = textOf(result);
+    expect(text).toContain("The guided path is not planned yet.");
+    expect(text).not.toContain("[object Object]");
+    expect(text).toContain("plan_guided_path");
+  });
+
+  it("submit_guided_lesson POSTs the document + generator to the section slot", async () => {
+    const summary = {
+      lesson_id: "l9",
+      app_url: "https://app.test/lessons/l9",
+      section_index: 2,
+      focus: "grammar",
+      unknown_lemmas: [],
+    };
+    mockFetch(jsonResponse(summary, 201));
+    const document = { format: "lesson.v1", blocks: [] };
+    const result = await call("submit_guided_lesson", {
+      submission_id: "abc/1",
+      section_index: 2,
+      document,
+      generator: { skill: "lingochunk-guided", version: "0.11.0" },
+    });
+    expect(lastUrl).toBe(
+      "https://api.test/api/v1/submissions/abc%2F1/guided/sections/2/lesson",
+    );
+    expect(lastInit.method).toBe("POST");
+    expect(JSON.parse(String(lastInit.body))).toEqual({
+      document,
+      generator: { skill: "lingochunk-guided", version: "0.11.0" },
+    });
+    expect(JSON.parse(textOf(result))).toEqual(summary);
+  });
+
+  it("submit_guided_lesson surfaces every invalid_document error legibly", async () => {
+    // The 422 lists EVERY problem at once; each must be readable (code +
+    // message + locator), never collapsed to "[object Object]".
+    mockFetch(
+      jsonResponse(
+        {
+          detail: {
+            code: "invalid_document",
+            message: "The document is invalid.",
+            errors: [
+              {
+                code: "dialogue_mismatch",
+                message: "Line does not match the transcript.",
+                positions: [5, 6],
+              },
+              {
+                code: "audio_outside_slice",
+                message: "Audio window is outside the section.",
+                audio_windows: [{ start: 10, end: 40 }],
+              },
+              {
+                code: "missing_field",
+                message: "Field is required.",
+                loc: ["blocks", 0, "kind"],
+              },
+            ],
+            unknown_lemmas: [],
+          },
+        },
+        422,
+      ),
+    );
+    const result = await call("submit_guided_lesson", {
+      submission_id: "s1",
+      section_index: 0,
+      document: { format: "lesson.v1", blocks: [] },
+    });
+    expect(result.isError).toBe(true);
+    const text = textOf(result);
+    expect(text).not.toContain("[object Object]");
+    expect(text).toContain("dialogue_mismatch: Line does not match the transcript.");
+    expect(text).toContain("positions 5, 6");
+    expect(text).toContain("audio_outside_slice");
+    expect(text).toContain("missing_field: Field is required. (blocks.0.kind)");
+    // The remediation nudges fixing them all in one pass.
+    expect(text).toContain("submit_guided_lesson again");
+  });
+
+  it("submit_guided_lesson treats a 409 section_taken as a re-brief cue", async () => {
+    mockFetch(
+      jsonResponse(
+        {
+          detail: {
+            code: "section_taken",
+            message: "This section already has a lesson.",
+          },
+        },
+        409,
+      ),
+    );
+    const result = await call("submit_guided_lesson", {
+      submission_id: "s1",
+      section_index: 1,
+      document: { format: "lesson.v1", blocks: [] },
+    });
+    expect(result.isError).toBe(true);
+    const text = textOf(result);
+    expect(text).toContain("This section already has a lesson.");
+    expect(text).toContain("get_guided_writer_brief");
+    expect(text).not.toContain("[object Object]");
   });
 });
