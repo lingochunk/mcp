@@ -312,6 +312,87 @@ async function commitAndPoll(
   }
 }
 
+/** POST the plan trigger. A 409 plan_ready (an agent calling twice; a path
+ *  already exists) or plan_in_progress (one is already generating, e.g. the
+ *  in-app button) is benign and short-circuits to a finished result rather
+ *  than an error, so it returns EITHER the planner job id (a string) OR the
+ *  result to hand straight back. A 422/429/503 bubbles up as an ApiError. */
+async function triggerPlan(
+  client: LingoChunkClient,
+  submissionId: string,
+): Promise<string | CallToolResult> {
+  try {
+    const { job_id } = await client.planGuidedPath(submissionId);
+    return job_id;
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 409) {
+      if (err.code === "plan_ready") {
+        return jsonResult({
+          status: "ready",
+          message:
+            "A guided path already exists for this episode; call " +
+            "get_guided_path to read its sections.",
+        });
+      }
+      if (err.code === "plan_in_progress") {
+        return jsonResult({
+          status: "pending",
+          message:
+            "A guided path is already being planned for this episode; call " +
+            "get_guided_path in a minute to see its sections.",
+        });
+      }
+    }
+    throw err;
+  }
+}
+
+/** Trigger the guided-path planner, then poll the planner job for up to ~60s.
+ *  Planning usually takes 60-90s, so budget exhaustion returns a friendly
+ *  {status:'pending'} ("call get_guided_path in a minute") rather than an
+ *  error, mirroring exportAndPoll's overrun. A benign 409 (see triggerPlan) is
+ *  handed straight back; a 422/429/503 bubbles up as an ApiError. */
+async function planAndPoll(
+  client: LingoChunkClient,
+  submissionId: string,
+): Promise<CallToolResult> {
+  const started = await triggerPlan(client, submissionId);
+  if (typeof started !== "string") return started;
+  const jobId = started;
+  const deadline = Date.now() + POLL_BUDGET_MS;
+  for (;;) {
+    const job = await client.getJob(jobId);
+    if (job.status === "completed") {
+      return jsonResult({
+        status: "ready",
+        job_id: jobId,
+        message:
+          "The guided path is planned; call get_guided_path to read its " +
+          "sections.",
+      });
+    }
+    if (job.status === "failed") {
+      return jsonResult({
+        status: "failed",
+        job_id: jobId,
+        error: job.error ?? null,
+        message: "Planning failed; call plan_guided_path again to retry.",
+      });
+    }
+    if (Date.now() >= deadline) {
+      return jsonResult({
+        status: "pending",
+        job_id: jobId,
+        message:
+          "Still planning (this usually takes 60-90s). Call get_guided_path " +
+          "in a minute to read the sections; do not re-trigger unless it " +
+          "never appears.",
+      });
+    }
+    await sleep(POLL_INTERVAL_MS);
+  }
+}
+
 /** Where the server runs relative to the user. "local": a stdio process on
  *  the user's machine (files it writes are the user's files). "remote": a
  *  hosted multi-user HTTP server, where writing to the local filesystem is
@@ -1822,5 +1903,54 @@ export function registerTools(
     },
     async ({ submission_id, annotation_id }) =>
       runJson(() => client.deleteAnnotation(submission_id, annotation_id)),
+  );
+
+  // --- Guided path tools (phase G1) ---------------------------------------
+
+  server.registerTool(
+    "plan_guided_path",
+    {
+      title: "Plan a guided path",
+      description:
+        "Plan a guided study path over one of the user's episodes: the server " +
+        "segments the episode into ordered sections, each a slice with a focus " +
+        "and a lesson slot to fill. Planning is server-side (spends none of " +
+        "your tokens) and COUNTS against the user's daily guided budget. This " +
+        "starts the planner and polls it for up to ~60s; planning usually " +
+        "takes 60-90s, so on a longer run it returns {status:'pending'} - call " +
+        "get_guided_path in a minute to read the sections. It returns " +
+        "{status:'ready'} once the path is planned, or when a path already " +
+        "exists (calling twice is safe); {status:'pending'} while it is still " +
+        "planning; or {status:'failed'} to retry. A 429 means the daily guided " +
+        "limit is reached (retry tomorrow); a 422 means the episode is too " +
+        "long to plan. Requires the guided:write scope.",
+      inputSchema: {
+        submission_id: z.string().min(1).describe("The submission id."),
+      },
+    },
+    async ({ submission_id }) =>
+      runResult(() => planAndPoll(client, submission_id)),
+  );
+
+  server.registerTool(
+    "get_guided_path",
+    {
+      title: "Get the guided path",
+      description:
+        "Read a submission's guided path: 'status' (none | pending | running " +
+        "| ready | failed), the ordered 'sections' (each with index, title, " +
+        "summary, sentence bounds from_position/to_position, cefr, " +
+        "study_minutes, suggested_focus, the attached lesson_id + lesson_focus " +
+        "once a lesson is written into the section, and 'completion' when the " +
+        "user has studied it), 'generating_section' and 'active_job' while a " +
+        "section is being generated, and 'last_generation_error'. 'sections' " +
+        "is null until the path is planned - call plan_guided_path first when " +
+        "the status is 'none'. Requires the guided:read scope.",
+      inputSchema: {
+        submission_id: z.string().min(1).describe("The submission id."),
+      },
+    },
+    async ({ submission_id }) =>
+      runJson(() => client.getGuidedPath(submission_id)),
   );
 }

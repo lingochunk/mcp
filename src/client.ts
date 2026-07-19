@@ -171,6 +171,12 @@ export interface DeleteAnnotationResult {
   annotation_id: number;
 }
 
+/** Result of POST /submissions/{id}/guided/plan: the enqueued planner job id,
+ *  to poll to completion via getJob. */
+export interface GuidedPlanResult {
+  job_id: string;
+}
+
 export type QueryValue = string | number | boolean | undefined | null;
 
 /** How long any single request may take before we abort it. */
@@ -212,7 +218,26 @@ export function formatDetail(detail: unknown): string | undefined {
     return parts.length ? parts.join("; ") : undefined;
   }
   if (detail && typeof detail === "object") {
+    // A structured guided/conflict detail is a `{code, message}` object (the
+    // guided W3 convention): surface its human message, not the raw JSON, so
+    // errorResult does not print the braces. Any other object is stringified.
+    const message = (detail as { message?: unknown }).message;
+    if (typeof message === "string" && message.trim()) {
+      return message.trim();
+    }
     return truncate(safeStringify(detail));
+  }
+  return undefined;
+}
+
+/** The stable `code` of a structured object detail (`{code, message}`, the
+ *  guided/conflict convention), when present - so a caller can branch on it
+ *  even though it rides inside `detail` rather than at the top level. Returns
+ *  undefined for a string detail (404/403) or the 422 validation list. */
+function objectDetailCode(detail: unknown): string | undefined {
+  if (detail && typeof detail === "object" && !Array.isArray(detail)) {
+    const code = (detail as { code?: unknown }).code;
+    if (typeof code === "string") return code;
   }
   return undefined;
 }
@@ -271,7 +296,10 @@ export class LingoChunkClient {
         const body = JSON.parse(raw) as { detail?: unknown; code?: unknown };
         const formatted = formatDetail(body?.detail);
         if (formatted) detail = formatted;
+        // A top-level `code` wins; otherwise a structured detail may carry it
+        // (guided conflicts put {code, message} in `detail`, not at the top).
         if (typeof body?.code === "string") code = body.code;
+        else code = objectDetailCode(body?.detail);
       } catch {
         // Malformed or truncated JSON error body; keep the status text.
       }
@@ -690,6 +718,28 @@ export class LingoChunkClient {
   ): Promise<DeleteAnnotationResult> {
     return this.deleteJson(
       `/submissions/${encodeURIComponent(submissionId)}/annotations/${annotationId}`,
+    );
+  }
+
+  // --- Guided path endpoints (phase G1) -----------------------------------
+
+  /** Trigger the server-side guided-path planner for a submission (Gemini
+   *  spend, inside the daily guided budget); returns the enqueued job id to
+   *  poll via getJob. Guided conflicts arrive as a `{code, message}` detail:
+   *  409 plan_ready / plan_in_progress, 422 submission_too_long, 429
+   *  guided_daily_limit (with Retry-After), 503 enqueue_failed. */
+  planGuidedPath(submissionId: string): Promise<GuidedPlanResult> {
+    return this.postJson(
+      `/submissions/${encodeURIComponent(submissionId)}/guided/plan`,
+    );
+  }
+
+  /** The submission's guided path: its ordered sections (bounds, focus, the
+   *  attached lesson and completion), plan status, and any in-flight
+   *  generation. */
+  getGuidedPath(submissionId: string): Promise<unknown> {
+    return this.getJson(
+      `/submissions/${encodeURIComponent(submissionId)}/guided`,
     );
   }
 }

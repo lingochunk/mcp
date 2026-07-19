@@ -115,7 +115,7 @@ function textOf(result: CallToolResult): string {
 }
 
 describe("tool registration", () => {
-  it("registers all thirty tools", () => {
+  it("registers all thirty-two tools", () => {
     expect([...tools.keys()].sort()).toEqual(
       [
         "add_card",
@@ -131,6 +131,7 @@ describe("tool registration", () => {
         "get_audio_clip",
         "get_audio_url",
         "get_authoring_guide",
+        "get_guided_path",
         "get_lesson",
         "get_transcript",
         "get_translation_source",
@@ -142,6 +143,7 @@ describe("tool registration", () => {
         "list_lessons",
         "list_library",
         "lookup_word",
+        "plan_guided_path",
         "put_language_translations",
         "save_lesson",
         "search_examples",
@@ -1539,5 +1541,175 @@ describe("annotation tools", () => {
     const text = textOf(result);
     expect(text).toContain("annotations:write");
     expect(text).toContain("Mint a new token");
+  });
+});
+
+describe("guided path tools", () => {
+  it("plan_guided_path POSTs the trigger, polls the job, then reports ready", async () => {
+    vi.useFakeTimers();
+    try {
+      mockFetchSequence([
+        jsonResponse({ job_id: "gp1" }),
+        jsonResponse({ status: "processing", progress: 30 }),
+        jsonResponse({ status: "completed", progress: 100 }),
+      ]);
+      const p = call("plan_guided_path", { submission_id: "s1" });
+      await vi.advanceTimersByTimeAsync(2100);
+      const payload = JSON.parse(textOf(await p));
+      expect(payload.status).toBe("ready");
+      expect(payload.job_id).toBe("gp1");
+      expect(payload.message).toContain("get_guided_path");
+      expect(lastUrl).toBe("https://api.test/api/v1/jobs/gp1");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("plan_guided_path returns friendly pending guidance when the budget expires", async () => {
+    vi.useFakeTimers();
+    try {
+      // Trigger returns a job, then the job stays processing forever: a fresh
+      // response per call so no body is read twice.
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async (input: string | URL, init?: RequestInit) => {
+          lastUrl = String(input);
+          lastInit = init ?? {};
+          return String(input).endsWith("/guided/plan")
+            ? jsonResponse({ job_id: "gp9" })
+            : jsonResponse({ status: "processing" });
+        }),
+      );
+      const p = call("plan_guided_path", { submission_id: "s1" });
+      await vi.advanceTimersByTimeAsync(61_000);
+      const payload = JSON.parse(textOf(await p));
+      expect(payload.status).toBe("pending");
+      expect(payload.message).toContain("get_guided_path");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("plan_guided_path treats a 409 plan_ready as a success (calling twice is safe)", async () => {
+    mockFetch(
+      jsonResponse(
+        { detail: { code: "plan_ready", message: "A ready guided path exists." } },
+        409,
+      ),
+    );
+    const result = await call("plan_guided_path", { submission_id: "abc/1" });
+    expect(lastUrl).toBe(
+      "https://api.test/api/v1/submissions/abc%2F1/guided/plan",
+    );
+    expect(lastInit.method).toBe("POST");
+    expect(result.isError).toBeFalsy();
+    const payload = JSON.parse(textOf(result));
+    expect(payload.status).toBe("ready");
+    expect(payload.message).toContain("get_guided_path");
+  });
+
+  it("plan_guided_path treats a 409 plan_in_progress as pending", async () => {
+    mockFetch(
+      jsonResponse(
+        {
+          detail: {
+            code: "plan_in_progress",
+            message: "Planning is already underway.",
+          },
+        },
+        409,
+      ),
+    );
+    const result = await call("plan_guided_path", { submission_id: "s1" });
+    expect(result.isError).toBeFalsy();
+    const payload = JSON.parse(textOf(result));
+    expect(payload.status).toBe("pending");
+    expect(payload.message).toContain("get_guided_path");
+  });
+
+  it("plan_guided_path reports a failed planner job for retry", async () => {
+    mockFetchSequence([
+      jsonResponse({ job_id: "gp2" }),
+      jsonResponse({ status: "failed", error: "planner boom" }),
+    ]);
+    const result = await call("plan_guided_path", { submission_id: "s1" });
+    const payload = JSON.parse(textOf(result));
+    expect(payload.status).toBe("failed");
+    expect(payload.error).toBe("planner boom");
+    expect(payload.message).toContain("plan_guided_path again");
+  });
+
+  it("plan_guided_path surfaces a 429 guided_daily_limit message and Retry-After", async () => {
+    // The guided detail is a {code, message} OBJECT, not a string: its message
+    // must surface cleanly, never as [object Object].
+    mockFetch(
+      jsonResponse(
+        {
+          detail: {
+            code: "guided_daily_limit",
+            message: "You have reached today's guided limit.",
+          },
+        },
+        429,
+        { "retry-after": "3600" },
+      ),
+    );
+    const result = await call("plan_guided_path", { submission_id: "s1" });
+    expect(result.isError).toBe(true);
+    const text = textOf(result);
+    expect(text).toContain("You have reached today's guided limit.");
+    expect(text).not.toContain("[object Object]");
+    expect(text).toContain("429");
+    expect(text).toContain("3600");
+  });
+
+  it("plan_guided_path surfaces a 422 submission_too_long message", async () => {
+    mockFetch(
+      jsonResponse(
+        {
+          detail: {
+            code: "submission_too_long",
+            message: "This episode is too long to plan.",
+          },
+        },
+        422,
+      ),
+    );
+    const result = await call("plan_guided_path", { submission_id: "s1" });
+    expect(result.isError).toBe(true);
+    const text = textOf(result);
+    expect(text).toContain("This episode is too long to plan.");
+    expect(text).not.toContain("[object Object]");
+  });
+
+  it("get_guided_path GETs /submissions/{id}/guided and returns the JSON", async () => {
+    const body = {
+      status: "ready",
+      error: null,
+      course_id: "c1",
+      generating_section: null,
+      sections: [
+        {
+          index: 0,
+          title: "Intro",
+          summary: "Warm-up on greetings.",
+          from_position: 1,
+          to_position: 20,
+          cefr: "A2",
+          study_minutes: 8,
+          suggested_focus: "comprehension",
+          lesson_id: null,
+          lesson_focus: null,
+          completion: null,
+        },
+      ],
+      active_job: null,
+      last_generation_error: null,
+    };
+    mockFetch(jsonResponse(body));
+    const result = await call("get_guided_path", { submission_id: "abc/1" });
+    expect(lastUrl).toBe("https://api.test/api/v1/submissions/abc%2F1/guided");
+    expect(lastInit.method).toBe("GET");
+    expect(JSON.parse(textOf(result))).toEqual(body);
   });
 });
