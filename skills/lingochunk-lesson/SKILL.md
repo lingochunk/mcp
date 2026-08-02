@@ -220,6 +220,7 @@ identical. The archetypes (recipes for the starred ones are below):
 | Shadowing * | `exercise_shadow` | pronunciation & prosody, the differentiator |
 | Translate / reconstruct * | `exercise_translate` | active recall, the Assimil second wave, mid/high levels |
 | Production | `exercise_production` | active use, mid/high levels |
+| SRS practice round | `deck_practice` | closing consolidation, any level (max one, after the exercises) |
 
 **Which archetypes for which lesson** (grammar-point type x level -> pick from):
 
@@ -417,7 +418,13 @@ overrides only and source_positions must be empty; recombination item (no
 position) REQUIRES cue + model_answer + >=1 source_positions provenance; scored
 only when meaning_to_target + typed + anchored) · `exercise_production
 {title?, instruction?, prompt, model_answer}` · `review {can_do?[<=5],
-new_lemmas?[<=12]}`.
+new_lemmas?[<=12]}` · `deck_practice {title?, instruction?, lemmas?[<=40]}`
+(embedded SRS flashcard practice over the lesson's own deck cards; empty or
+omitted `lemmas` means every lemma the lesson teaches — vocab entries plus
+review `new_lemmas`. Scope only, never state: the app resolves the learner's
+cards and scheduling live, and folds in cards the learner made from the
+lesson's own sentences. At most ONE per lesson, placed late — after the
+exercises, before the `review` block).
 
 `position?` in the reference is the SCHEMA shape (optional); the Anchoring
 section is where authoring policy makes some of these anchors mandatory.
