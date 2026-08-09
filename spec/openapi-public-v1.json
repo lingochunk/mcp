@@ -2,8 +2,8 @@
   "openapi": "3.1.0",
   "info": {
     "title": "LingoChunk Public API",
-    "description": "The LingoChunk public API. Read your FSRS-graded vocabulary, look words up, browse your library, pull sliced transcripts and native audio, search your listening history, and cut audio clips.\n\nWrite, too: upload audio recordings for processing (optionally publishing them into a collection you own), add vocabulary and custom cards to your decks, export a deck to Anki, and save a generated HTML lesson to your library.\n\nAuthenticate with a personal access token created in your account settings: send it as `Authorization: Bearer lcp_...`. Each endpoint requires a scope, granted to the token at creation.",
-    "version": "1.8"
+    "description": "The LingoChunk public API. Read your FSRS-graded vocabulary, look words up, browse your library, pull sliced transcripts and native audio, search your listening history, and cut audio clips.\n\nWrite, too: upload audio recordings (or video files, ingested for their audio track) for processing (optionally publishing them into a collection you own), add vocabulary and custom cards to your decks, export a deck to Anki, and save a generated HTML lesson to your library.\n\nAuthenticate with a personal access token created in your account settings: send it as `Authorization: Bearer lcp_...`. Each endpoint requires a scope, granted to the token at creation.",
+    "version": "1.9"
   },
   "servers": [
     {
@@ -980,6 +980,16 @@
               }
             }
           },
+          "409": {
+            "description": "Conflict; the ErrorV1 `code` names the case",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorV1"
+                }
+              }
+            }
+          },
           "503": {
             "description": "Audio clipping is unavailable on this server",
             "content": {
@@ -1780,6 +1790,99 @@
         ]
       }
     },
+    "/api/v1/lessons/resolve-audio": {
+      "post": {
+        "tags": [
+          "public-v1"
+        ],
+        "summary": "Resolve Audio Spans",
+        "description": "Resolve transcript quotes to word-precise, padded audio windows.\n\nThe lesson-authoring companion to hand-picking seconds: copy a stretch\nof transcript text (it may start mid-sentence and cross sentence\nboundaries), get back a ``{start, end}`` window cut on word-level\ntimestamps with a lead/tail pad that never clips a word. Results align\nindex-for-index with the request; a quote that cannot be located\nconfidently returns an ``error`` entry instead of a guessed window.\n\nRead access to the submission suffices (same rule as reading its\ntranscript); resolution touches nothing but stored timing rows.\n\n**Requires scope:** `lessons:write`",
+        "operationId": "resolve_audio_spans_api_v1_lessons_resolve_audio_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResolveAudioSpansRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AudioSpansResolvedV1"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found or not accessible",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorV1"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid API token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorV1"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The token lacks the scope this endpoint requires",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorV1"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded. The `Retry-After` response header gives the number of seconds to wait.",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds to wait before retrying",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorV1"
+                }
+              }
+            }
+          }
+        },
+        "x-required-scopes": [
+          "lessons:write"
+        ]
+      }
+    },
     "/api/v1/lessons/{lesson_id}/document": {
       "get": {
         "tags": [
@@ -2424,7 +2527,7 @@
           "public-v1"
         ],
         "summary": "Create Submission",
-        "description": "Upload an audio recording and queue it for processing (transcription,\nchunking, vocabulary enrichment). Accepts any audio format ffmpeg can\ndecode, including the ``audio/webm`` (Opus) files that MediaRecorder\nproduces. Poll ``/v1/submissions/{id}/status`` until ``ready``.\n\nUploads count against your plan's daily-submission and monthly audio\nquotas, and the file must be within your plan's size and duration caps.\n\nSet ``enrichment_mode=agent`` (plan feature ``byo_enrichment``) to skip the\ninternal AI enrichment entirely and finish the lesson yourself: the\nsubmission still becomes ``ready``, with tokens but no meanings, and you\nsupply those through ``PUT /v1/submissions/{id}/translations/{language}``\ntargeting the submission's OWN translation language, then ``commit``.\n\n**Requires scope:** `submissions:write`",
+        "description": "Upload a recording and queue it for processing (transcription,\nchunking, vocabulary enrichment). Accepts any audio format ffmpeg can\ndecode, including the ``audio/webm`` (Opus) files that MediaRecorder\nproduces. A video container (MP4, MOV, MKV and similar) is accepted too\nand ingested for its audio track; the video itself is not stored, so the\nfile must carry a soundtrack. Poll ``/v1/submissions/{id}/status`` until\n``ready``.\n\nUploads count against your plan's daily-submission and monthly audio\nquotas, and the file must be within your plan's size and duration caps.\n\nSet ``enrichment_mode=agent`` (plan feature ``byo_enrichment``) to skip the\ninternal AI enrichment entirely and finish the lesson yourself: the\nsubmission still becomes ``ready``, with tokens but no meanings, and you\nsupply those through ``PUT /v1/submissions/{id}/translations/{language}``\ntargeting the submission's OWN translation language, then ``commit``.\n\n**Requires scope:** `submissions:write`",
         "operationId": "create_submission_api_v1_submissions_post",
         "requestBody": {
           "content": {
@@ -2704,7 +2807,7 @@
           "public-v1"
         ],
         "summary": "List Submission Languages",
-        "description": "The language landscape of one of your lessons: which languages it already\nexists in, which ordinary targets can be added via the Groq fan-out, which\nleveled same-language targets can be drafted, and any drafts in progress.\n\n**Requires scope:** `content:read`",
+        "description": "The language landscape of one of your lessons: which languages it already\nexists in, which ordinary targets can be added via the Groq fan-out, which\nleveled same-language targets can be added (fan-out) or drafted (agent),\nand any drafts in progress.\n\n**Requires scope:** `content:read`",
         "operationId": "list_submission_languages_api_v1_submissions__submission_id__languages_get",
         "parameters": [
           {
@@ -2796,7 +2899,7 @@
           "public-v1"
         ],
         "summary": "Add Languages",
-        "description": "Trigger the internal Groq fan-out for ordinary target languages. Returns\none job id per enqueued language (poll /v1/jobs/{job_id}); leveled\npseudo-codes are skipped with reason ``agent_only_target`` (use the draft\nflow for those). No email is sent.\n\n409 ``enrichment_incomplete`` for a lesson uploaded with\n``enrichment_mode=agent`` that has not been filled in yet: the fan-out\ncopies the lesson's meanings, so it would produce empty siblings.\n\n**Requires scope:** `translations:write`",
+        "description": "Trigger the internal Groq fan-out for target languages. Returns one\njob id per enqueued language (poll /v1/jobs/{job_id}). Leveled\npseudo-codes of THIS lesson's source (e.g. ``en-a2`` on English audio)\nare served internally via the simplify chain; they are skipped with\nreason ``agent_only_target`` only when the lesson itself is monolingual\n(no cross-language pivot to anchor senses on - use the draft flow\nthere). No email is sent.\n\n409 ``enrichment_incomplete`` for a lesson uploaded with\n``enrichment_mode=agent`` that has not been filled in yet: the fan-out\ncopies the lesson's meanings, so it would produce empty siblings.\n\n**Requires scope:** `translations:write`",
         "operationId": "add_languages_api_v1_submissions__submission_id__languages_post",
         "parameters": [
           {
@@ -5159,7 +5262,7 @@
             "maxItems": 10,
             "minItems": 1,
             "title": "Languages",
-            "description": "1..10 ordinary translation targets; leveled pseudo-codes are rejected here (use the draft/commit flow instead)"
+            "description": "1..10 target codes: ordinary translation targets, or leveled pseudo-codes of this lesson's source (served by the internal simplify chain when the lesson has a cross-language pivot)"
           }
         },
         "type": "object",
@@ -5409,7 +5512,105 @@
           "audio"
         ],
         "title": "AudioSliceBlock",
-        "description": "A standalone player row (e.g. the whole-passage first listen).\n\n``listen_first`` starts the passage's original text layer BLURRED\n(paint-only, geometry stable - the layer sits in place at full size, only\nthe ink is washed), so the learner hears the passage before reading it and\nreveals the text with the existing layer control when ready. This is the\nanticipation / listen-first round: nothing is hidden from the DOM, so\nreveal is instant and the layout never reflows.\n\n``show_words`` is DEPRECATED and inert (a documented no-op): it once\nrendered the live transcript words under the row, but the reader became\nalways-open, so the field no longer changes anything. It is still accepted\nfor backwards compatibility (documents authored while it was live must keep\nvalidating). For a listen-first / anticipation round use ``listen_first``\ninstead; ``false`` here is NOT that (it is the schema default, so re-honouring\nit would silently blur every older document that never opted in).\n\n``notes`` is the numbered footnote apparatus below the passage (the\nAssimil treatment the dialogue block carries), span-anchored into the\nlive transcript; see ``SliceNote``."
+        "description": "A standalone player row (e.g. the whole-passage first listen).\n\n``listen_first`` starts the passage's original text layer BLURRED\n(paint-only, geometry stable - the layer sits in place at full size, only\nthe ink is washed), so the learner hears the passage before reading it and\nreveals the text with the existing layer control when ready. This is the\nanticipation / listen-first round: nothing is hidden from the DOM, so\nreveal is instant and the layout never reflows.\n\n``show_words`` is DEPRECATED and inert (a documented no-op): it once\nrendered the live transcript words under the row, but the reader became\nalways-open, so the field no longer changes anything. It is still accepted\nfor backwards compatibility (documents authored while it was live must keep\nvalidating). For a listen-first / anticipation round use ``listen_first``\ninstead; ``false`` here is NOT that (it is the schema default, so re-honouring\nit would silently blur every older document that never opted in).\n\n``notes`` is the numbered footnote apparatus below the passage (the\ncoursebook treatment the dialogue block carries), span-anchored into the\nlive transcript; see ``SliceNote``."
+      },
+      "AudioSpanQueryV1": {
+        "properties": {
+          "quote": {
+            "type": "string",
+            "maxLength": 400,
+            "minLength": 1,
+            "title": "Quote"
+          },
+          "near_position": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 1000000.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Near Position"
+          }
+        },
+        "type": "object",
+        "required": [
+          "quote"
+        ],
+        "title": "AudioSpanQueryV1",
+        "description": "One transcript quote to resolve into a playable audio window.\n\n``quote`` is text copied from the transcript (any stretch — it may start\nmid-sentence and cross sentence boundaries; matching ignores case,\npunctuation and spacing). ``near_position`` names a sentence position\nclose to the quote: it narrows the search window, which both speeds the\nlookup up and enables tolerant (fuzzy) matching for transcripts whose\ntext was edited after transcription. Without it, matching is exact-only\nagainst the whole episode."
+      },
+      "AudioSpanResolvedV1": {
+        "properties": {
+          "start": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start"
+          },
+          "end": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End"
+          },
+          "exact": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Exact",
+            "description": "True when the quote matched verbatim; false for a tolerant match against edited text"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          }
+        },
+        "type": "object",
+        "title": "AudioSpanResolvedV1",
+        "description": "One resolved window, aligned index-for-index with the request spans.\n\n``error`` is set (and start/end null) when the quote could not be\nlocated confidently: ``no_words`` (the submission has no word-level\ntimestamps) or ``unresolved`` (the quote did not match — check it was\ncopied verbatim, or pass ``near_position``)."
+      },
+      "AudioSpansResolvedV1": {
+        "properties": {
+          "spans": {
+            "items": {
+              "$ref": "#/components/schemas/AudioSpanResolvedV1"
+            },
+            "type": "array",
+            "title": "Spans"
+          }
+        },
+        "type": "object",
+        "required": [
+          "spans"
+        ],
+        "title": "AudioSpansResolvedV1",
+        "description": "Results for every requested span, in request order."
       },
       "AudioUrlV1": {
         "properties": {
@@ -5444,7 +5645,7 @@
             "type": "string",
             "contentMediaType": "application/octet-stream",
             "title": "Audio",
-            "description": "Audio file (any ffmpeg format)"
+            "description": "Audio file (any ffmpeg format). A video container is also accepted and ingested for its audio track; the video itself is not kept."
           },
           "learning_language": {
             "type": "string",
@@ -5503,6 +5704,30 @@
             ],
             "title": "Enrichment Mode",
             "description": "'server' (default) runs the internal AI enrichment. 'agent' runs the lesson bare (transcription, alignment, tokenisation, IPA) and leaves the meanings for you to fill in with your own agent via the translations draft/commit endpoints; requires the byo_enrichment plan feature"
+          },
+          "lesson_production": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lesson Production",
+            "description": "'none' (default), 'teaser' or 'full': write lessons automatically once processing finishes ('teaser' = the first lesson plus the course plan, 'full' = the whole course). Requires the guided:write AND lessons:write scopes in addition to submissions:write (planning spends server LLM budget and the run creates lessons). Only on deployments with lesson production enabled"
+          },
+          "lesson_length": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lesson Length",
+            "description": "'short', 'standard' (default) or 'long': the length preference auto-produced lessons are written to"
           }
         },
         "type": "object",
@@ -6175,6 +6400,73 @@
         "title": "DeckListV1",
         "description": "The learner's decks, newest activity first."
       },
+      "DeckPracticeBlock": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[a-z0-9]{4,16}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id",
+            "description": "Server-managed stable identity; never author or modify it - the save route fills and preserves it.",
+            "readOnly": true
+          },
+          "type": {
+            "type": "string",
+            "const": "deck_practice",
+            "title": "Type"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 120,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "instruction": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 300,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Instruction"
+          },
+          "lemmas": {
+            "items": {
+              "type": "string",
+              "maxLength": 100,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 40,
+            "title": "Lemmas",
+            "description": "Restrict practice to these lemmas; empty = every lemma the lesson teaches (vocab entries + review new_lemmas)"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "type"
+        ],
+        "title": "DeckPracticeBlock",
+        "description": "Embedded SRS practice: the deck-review interface, inside the lesson.\n\nThe block stores a SCOPE, never state: like ``VocabEntry`` (whose FSRS\nflags resolve live), the learner's cards and scheduling are resolved at\nrender time from their own deck for this submission. ``lemmas`` restricts\nthe scope; EMPTY means \"everything this lesson teaches\" (every vocab-entry\nlemma plus the review block's ``new_lemmas``), so an authored lesson gets\na full practice round with no extra authoring. The renderer also folds in\ncards the learner created from this lesson's own sentences (the reader\nselection flow), so learner-added material is practised alongside the\nauthor's picks.\n\nOn first entry the renderer ensures the scoped phrases exist as deck cards\n(the same merge-mode add the vocab row's ``+`` uses - never a destructive\nreplace), then runs the standard review session over the due ones. The\noffline HTML export renders the phrase list statically (scheduling lives\nin the app, live state is never copied into artifacts). Registered users\nonly; read-only surfaces show the phrase list without a session."
+      },
       "DeckSummaryV1": {
         "properties": {
           "id": {
@@ -6322,7 +6614,7 @@
           "lines"
         ],
         "title": "DialogueBlock",
-        "description": "The transcript slice as a dialogue.\n\n``presentation`` selects the renderer treatment, presentation only with no\ncontent semantics: ``auto`` (the default) preserves the current inference -\nthe Assimil coursebook treatment (facing translation column, literal gloss,\nfootnote apparatus) whenever any line carries a ``literal`` or a ``note``,\nelse the legacy speaker-forward layout; ``parallel`` forces the coursebook\ntreatment; ``conversation`` forces the speaker-forward treatment."
+        "description": "The transcript slice as a dialogue.\n\n``presentation`` selects the renderer treatment, presentation only with no\ncontent semantics: ``auto`` (the default) preserves the current inference -\nthe coursebook treatment (facing translation column, literal gloss,\nfootnote apparatus) whenever any line carries a ``literal`` or a ``note``,\nelse the legacy speaker-forward layout; ``parallel`` forces the coursebook\ntreatment; ``conversation`` forces the speaker-forward treatment."
       },
       "DialogueLine": {
         "properties": {
@@ -6451,7 +6743,7 @@
           "text"
         ],
         "title": "DialogueLine",
-        "description": "One transcript sentence presented as a dialogue line.\n\n``position`` anchors the line to the stored sentence (the save route\nverifies ``text`` matches it, so a lesson cannot misattribute content to\nthe recording). ``highlights`` are [start, end) CODE-POINT ranges into\n``text`` for the amber pattern marks (both renderers treat them as code\npoints; supplementary-plane characters count as one). Ranges must not\noverlap - both renderers would otherwise duplicate the overlapped text.\n\n``note`` is a short authorial aside under the line (\"register: informal\",\n\"this is the idiom from the title\") - the author's voice, never quoted\ncontent, so it needs no congruence check. Renders inline mini-Markdown\nmarks (bold/italic/code) only, like ``grammar_box.merke``.\n\n``example``/``example_translation`` are the Assimil note shape: a fresh\nexample sentence with its translation, rendered as an indented second line\nunder the note. They belong to the note apparatus (author's content, not\nquoted from the transcript, so no congruence check), which is why\n``example`` requires ``note`` - it extends the note, it does not stand\nalone - and ``example_translation`` requires ``example``."
+        "description": "One transcript sentence presented as a dialogue line.\n\n``position`` anchors the line to the stored sentence (the save route\nverifies ``text`` matches it, so a lesson cannot misattribute content to\nthe recording). ``highlights`` are [start, end) CODE-POINT ranges into\n``text`` for the amber pattern marks (both renderers treat them as code\npoints; supplementary-plane characters count as one). Ranges must not\noverlap - both renderers would otherwise duplicate the overlapped text.\n\n``note`` is a short authorial aside under the line (\"register: informal\",\n\"this is the idiom from the title\") - the author's voice, never quoted\ncontent, so it needs no congruence check. Renders inline mini-Markdown\nmarks (bold/italic/code) only, like ``grammar_box.merke``.\n\n``example``/``example_translation`` are the coursebook note shape: a fresh\nexample sentence with its translation, rendered as an indented second line\nunder the note. They belong to the note apparatus (author's content, not\nquoted from the transcript, so no congruence check), which is why\n``example`` requires ``note`` - it extends the note, it does not stand\nalone - and ``example_translation`` requires ``example``."
       },
       "DictationItem": {
         "properties": {
@@ -6782,7 +7074,7 @@
           "items"
         ],
         "title": "ExerciseGapFillBlock",
-        "description": "Gap-fill, optionally cued by a word bank.\n\n``style=\"dots\"`` asks renderers for the Assimil cloze treatment: each\ngap drawn as one dot per character of its first accepted answer, so\nthe shape of the missing word is itself a cue. Presentation-only."
+        "description": "Gap-fill, optionally cued by a word bank.\n\n``style=\"dots\"`` asks renderers for the dotted cloze treatment: each\ngap drawn as one dot per character of its first accepted answer, so\nthe shape of the missing word is itself a cue. Presentation-only."
       },
       "ExerciseMatchBlock": {
         "properties": {
@@ -7247,7 +7539,7 @@
           "items"
         ],
         "title": "ExerciseTranslateBlock",
-        "description": "Translate/reconstruct: the Assimil daily translate exercise and the\nactive-wave reconstruction in one block (the interaction is identical - cue\nin one language, produce the other, compare with a model, replay the source;\nonly direction, response mode and scheduling differ).\n\nSCORING CONTRACT (stated here verbatim so every renderer and the export stay\nin sync): an item contributes 1 scored point IFF direction is\n``meaning_to_target`` AND response involves typing (``type`` or\n``speak_then_type``) AND the item is anchored (``position`` set) - the\ndiffable-exact case, first-check all-or-nothing like dictation. Every other\nconfiguration is self-assessed and contributes 0. Offline export never\nscores this block (the anchored answer is live text and is never copied into\nthe artifact)."
+        "description": "Translate/reconstruct: the daily translate exercise and the\nactive-wave reconstruction in one block (the interaction is identical - cue\nin one language, produce the other, compare with a model, replay the source;\nonly direction, response mode and scheduling differ).\n\nSCORING CONTRACT (stated here verbatim so every renderer and the export stay\nin sync): an item contributes 1 scored point IFF direction is\n``meaning_to_target`` AND response involves typing (``type`` or\n``speak_then_type``) AND the item is anchored (``position`` set) - the\ndiffable-exact case, first-check all-or-nothing like dictation. Every other\nconfiguration is self-assessed and contributes 0. Offline export never\nscores this block (the anchored answer is live text and is never copied into\nthe artifact)."
       },
       "FsrsSummaryV1": {
         "properties": {
@@ -7362,7 +7654,8 @@
                 "maxLength": 60,
                 "minLength": 1
               },
-              "type": "array"
+              "type": "array",
+              "maxItems": 8
             },
             "type": "array",
             "maxItems": 5,
@@ -7846,6 +8139,18 @@
             "type": "string",
             "title": "Title",
             "description": "Lesson title"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subtitle",
+            "description": "Strap line from the document's 'subtitle', when it has one (lesson.v1 only); a one-line description for lesson lists"
           },
           "language": {
             "type": "string",
@@ -8744,7 +9049,7 @@
           "reason": {
             "type": "string",
             "title": "Reason",
-            "description": "source | already_exists | invalid_target | agent_only_target"
+            "description": "source | already_exists | invalid_target | agent_only_target (leveled code on a monolingual lesson: no cross-language pivot, use the agent draft flow)"
           }
         },
         "type": "object",
@@ -8875,6 +9180,18 @@
             "type": "string",
             "title": "Title",
             "description": "Lesson title"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subtitle",
+            "description": "Strap line from the document's 'subtitle', when it has one (lesson.v1 only); a one-line description for lesson lists"
           },
           "language": {
             "type": "string",
@@ -9195,12 +9512,16 @@
                 },
                 {
                   "$ref": "#/components/schemas/ReviewBlock"
+                },
+                {
+                  "$ref": "#/components/schemas/DeckPracticeBlock"
                 }
               ],
               "discriminator": {
                 "propertyName": "type",
                 "mapping": {
                   "audio_slice": "#/components/schemas/AudioSliceBlock",
+                  "deck_practice": "#/components/schemas/DeckPracticeBlock",
                   "dialogue": "#/components/schemas/DialogueBlock",
                   "exercise_dictation": "#/components/schemas/ExerciseDictationBlock",
                   "exercise_gap_fill": "#/components/schemas/ExerciseGapFillBlock",
@@ -9577,6 +9898,18 @@
             "title": "Title",
             "description": "Lesson title"
           },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subtitle",
+            "description": "Strap line from the document's 'subtitle', when it has one (lesson.v1 only); a one-line description for lesson lists"
+          },
           "language": {
             "type": "string",
             "title": "Language",
@@ -9753,6 +10086,18 @@
             "type": "string",
             "title": "Title",
             "description": "Lesson title"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subtitle",
+            "description": "Strap line from the document's 'subtitle', when it has one (lesson.v1 only); a one-line description for lesson lists"
           },
           "language": {
             "type": "string",
@@ -10315,7 +10660,7 @@
           "text"
         ],
         "title": "ProseBlock",
-        "description": "Instruction lines and short passages.\n\n``text`` renders through the app's mini-Markdown subset: ``**bold**``,\n``*italic*``, backtick code, ``- ``/``* `` bullet lines, and blank-line\nparagraph breaks. Headings, links, tables and raw HTML are NOT rendered -\nthey show as literal text. The same subset applies to\n``grammar_box.explanation``; exercise ``instruction`` fields and\n``grammar_box.merke``/``achtung`` render the inline marks only. All other\ntext fields (titles, prompts, options, meanings, dialogue) are plain text.\n\n``style=\"culture\"`` renders as a lightly ruled labelled callout (the Assimil\n``nota culturale`` treatment - a \"Culture note\" caption, ink-bordered like\n``grammar_box`` but lighter), giving a cultural aside its own visual\nidentity as a different kind of text. It uses the same mini-Markdown rules\nas ``body``; the difference is presentation only, no content semantics."
+        "description": "Instruction lines and short passages.\n\n``text`` renders through the app's mini-Markdown subset: ``**bold**``,\n``*italic*``, backtick code, ``- ``/``* `` bullet lines, and blank-line\nparagraph breaks. Headings, links, tables and raw HTML are NOT rendered -\nthey show as literal text. The same subset applies to\n``grammar_box.explanation``; exercise ``instruction`` fields and\n``grammar_box.merke``/``achtung`` render the inline marks only. All other\ntext fields (titles, prompts, options, meanings, dialogue) are plain text.\n\n``style=\"culture\"`` renders as a lightly ruled labelled callout (the\n``nota culturale`` treatment - a \"Culture note\" caption, ink-bordered like\n``grammar_box`` but lighter), giving a cultural aside its own visual\nidentity as a different kind of text. It uses the same mini-Markdown rules\nas ``body``; the difference is presentation only, no content semantics."
       },
       "PutTranslationsRequestV1": {
         "properties": {
@@ -10429,6 +10774,30 @@
         ],
         "title": "RejectedSentenceV1",
         "description": "One drafted sentence the server refused, with the reason."
+      },
+      "ResolveAudioSpansRequest": {
+        "properties": {
+          "submission_id": {
+            "type": "string",
+            "title": "Submission Id"
+          },
+          "spans": {
+            "items": {
+              "$ref": "#/components/schemas/AudioSpanQueryV1"
+            },
+            "type": "array",
+            "maxItems": 20,
+            "minItems": 1,
+            "title": "Spans"
+          }
+        },
+        "type": "object",
+        "required": [
+          "submission_id",
+          "spans"
+        ],
+        "title": "ResolveAudioSpansRequest",
+        "description": "Resolve transcript quotes to word-precise ``{start, end}`` windows.\n\nThe windows come from the submission's word-level timestamps, padded\nwith a lead/tail so playback never clips a word (overshoot over\ntruncation: when a pad would land inside a neighbouring word, the window\nextends to include that word whole). Use the results as ``audio``\nvalues in lesson.v1 blocks instead of hand-picking sentence-boundary\nseconds — transcription's sentence chunking is often not where a nice\nexample starts or ends."
       },
       "ReviewBlock": {
         "properties": {
@@ -10713,7 +11082,7 @@
           "text"
         ],
         "title": "SliceNote",
-        "description": "A numbered footnote under an ``audio_slice`` reader passage.\n\n``position`` anchors the note to a live transcript sentence; ``quote``\nnames the exact substring of that sentence the note is about. Matching is\nRENDER-TIME only (nothing is copied into the document, the same live-text\nrule as ``show_words``): the renderer washes the found span and sets the\ncircled note number at its end, and a quote the live text no longer\ncontains degrades to a sentence-end marker, so a transcript edit can\nnever paint a wrong span. ``text`` renders inline mini-Markdown marks\n(bold/italic/code) only, like ``DialogueLine.note``.\n\n``example``/``example_translation`` are the Assimil note shape: a fresh\nexample sentence with its translation, rendered as an indented second line\nunder the note. They are the author's content (not quoted from the\ntranscript), so they carry no congruence check; only the pairing rule\napplies - ``example_translation`` requires ``example`` (a translation with\nnothing to translate is meaningless). The note itself always has ``text``,\nso ``example`` needs no separate anchor of its own."
+        "description": "A numbered footnote under an ``audio_slice`` reader passage.\n\n``position`` anchors the note to a live transcript sentence; ``quote``\nnames the exact substring of that sentence the note is about. Matching is\nRENDER-TIME only (nothing is copied into the document, the same live-text\nrule as ``show_words``): the renderer washes the found span and sets the\ncircled note number at its end, and a quote the live text no longer\ncontains degrades to a sentence-end marker, so a transcript edit can\nnever paint a wrong span. ``text`` renders inline mini-Markdown marks\n(bold/italic/code) only, like ``DialogueLine.note``.\n\n``example``/``example_translation`` are the coursebook note shape: a fresh\nexample sentence with its translation, rendered as an indented second line\nunder the note. They are the author's content (not quoted from the\ntranscript), so they carry no congruence check; only the pairing rule\napplies - ``example_translation`` requires ``example`` (a translation with\nnothing to translate is meaningless). The note itself always has ``text``,\nso ``example`` needs no separate anchor of its own."
       },
       "SubmissionCreatedV1": {
         "properties": {
@@ -10782,7 +11151,7 @@
             },
             "type": "array",
             "title": "Simplify Targets",
-            "description": "Leveled same-language pseudo-codes you may draft for this source (e.g. de-a2), minus any already present"
+            "description": "Leveled same-language pseudo-codes for this source (e.g. de-a2), minus any already present. On a lesson with a cross-language pivot these can be ADDED via the fan-out; on a monolingual lesson (its own translation is the source or a register of it) they are draft-only - the fan-out skips them as agent_only_target"
           },
           "drafts": {
             "items": {
