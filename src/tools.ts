@@ -105,6 +105,17 @@ function errorResult(err: unknown): CallToolResult {
       text +=
         "\nThe next section has no transcript sentences to build from; report " +
         "this to the user rather than retrying.";
+    } else if (err.code === "unknown_pack") {
+      text +=
+        "\nThat teaching pack id does not exist. Drop the 'pack' argument to " +
+        "take the server's default rather than guessing another id.";
+    } else if (err.code === "pack_admin_only") {
+      // Checked before the generic 403 below: this is NOT a missing scope, and
+      // minting a new token would not fix it.
+      text +=
+        "\nThat teaching pack is reserved for admin accounts - this is not a " +
+        "missing scope, so a new token will not help. Drop the 'pack' " +
+        "argument to use the default pack instead.";
     } else if (err.status === 401) {
       text += "\nCheck LINGOCHUNK_TOKEN is a valid, un-revoked token (prefix lcp_).";
     } else if (err.status === 403) {
@@ -511,9 +522,12 @@ export function registerTools(
     .max(32)
     .optional()
     .describe(
-      "Optional teaching pack id for this section (e.g. 'dialogue'). Omit " +
-        "for the server's default, which is what these endpoints have " +
-        "always written with; on the submit, pass back the brief's 'pack_id'.",
+      "Optional teaching pack id. OMIT IT unless the user asked for a named " +
+        "teaching style: the default ('dialogue') is what these endpoints " +
+        "have always written with, and other packs are reserved (a 403 " +
+        "pack_admin_only for an ordinary account, a 422 unknown_pack for an " +
+        "id that does not exist). On the submit, pass back the brief's " +
+        "'pack_id'.",
     );
 
   server.registerTool(

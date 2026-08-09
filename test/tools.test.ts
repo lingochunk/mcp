@@ -2186,6 +2186,48 @@ describe("lesson writer tools", () => {
     expect(JSON.parse(String(lastInit.body))).toEqual({ document });
   });
 
+  // Pack conflicts arrive in the GuidedErrorV1 envelope (detail = {code,
+  // message}). pack_admin_only in particular must NOT get the generic 403
+  // "mint a token with that scope" remediation - a new token cannot fix it.
+  it("explains a 403 pack_admin_only as a reserved pack, not a missing scope", async () => {
+    mockFetch(
+      jsonResponse(
+        {
+          detail: {
+            code: "pack_admin_only",
+            message: "That pack is admin-only.",
+          },
+        },
+        403,
+      ),
+    );
+    const result = await call("get_lesson_writer_brief", {
+      submission_id: "s1",
+      pack: "clip",
+    });
+    expect(result.isError).toBe(true);
+    const text = textOf(result);
+    expect(text).toContain("reserved for admin accounts");
+    expect(text).not.toContain("Mint a new token");
+  });
+
+  it("explains a 422 unknown_pack by telling the agent to drop the argument", async () => {
+    mockFetch(
+      jsonResponse(
+        { detail: { code: "unknown_pack", message: "No such pack." } },
+        422,
+      ),
+    );
+    const result = await call("submit_lesson_section", {
+      submission_id: "s1",
+      section_index: 0,
+      document: { format: "lesson.v1", blocks: [] },
+      pack: "nope",
+    });
+    expect(result.isError).toBe(true);
+    expect(textOf(result)).toContain("does not exist");
+  });
+
   // The deprecated aliases share the handler instance, so this proves the pair
   // cannot diverge in behaviour, not merely in description.
   it("the deprecated aliases reach the same endpoints as the new names", async () => {

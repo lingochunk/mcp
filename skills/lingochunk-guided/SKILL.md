@@ -6,8 +6,10 @@ description: Write the parts of a LingoChunk lesson path yourself, following the
 # Lesson path writer
 
 A LingoChunk **lesson path** turns one episode into an ordered sequence of
-study sections, each holding a short lesson focused on one thing
-(comprehension, grammar, speaking or vocabulary). The app can generate those
+study sections, each holding a short lesson focused on one thing (the default
+pack uses comprehension, grammar, speaking and vocabulary; another pack may
+answer with focus keys of its own, so read the brief rather than assuming this
+list). The app can generate those
 lessons with its own internal writer; this skill lets you write them instead,
 part by part, following the SAME brief the internal writer receives. Because
 you write into the same sections, your parts render identically: the journey
@@ -144,6 +146,14 @@ code:
   brief's `materials.language` / `materials.translation_language` verbatim.
 - **429 `guided_daily_limit`**: the daily lesson-path budget is spent; try again
   the next day.
+- **422 `unknown_pack`** / **403 `pack_admin_only`** (from the brief or submit):
+  the `pack` you named does not exist, or is reserved for admin accounts. The
+  403 is NOT a missing scope, so minting a token will not fix it. Drop `pack`
+  and take the default.
+- **404 on every one of these tools**: the authoring surface is gated behind
+  the `lesson_production_enabled` flag (it moved off `guided_lessons_enabled`
+  when the guided page was retired). If all of them 404 while other tools work,
+  that flag is off for the account - tell the user, rather than retrying.
 
 ## Rules
 

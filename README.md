@@ -319,6 +319,17 @@ when you want the update.
 The token is only ever sent as an `Authorization: Bearer` header to the
 configured origin; it is never written to disk or logged.
 
+### Troubleshooting
+
+- **Every lesson-path tool 404s while other tools work.** That surface is
+  gated behind the `lesson_production_enabled` account flag. It moved there
+  from `guided_lessons_enabled` when the guided page was retired, so a
+  previously working account can start 404ing without the token changing.
+- **A tool 403s naming a scope.** Mint a token that includes it (LingoChunk ->
+  Settings -> API tokens). The one exception is `pack_admin_only`, which is a
+  reserved teaching pack rather than a missing scope - drop the `pack`
+  argument instead.
+
 ### Hosted (remote) mode
 
 `node dist/index.js --http` serves the same tools over Streamable HTTP for
