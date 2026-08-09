@@ -394,7 +394,7 @@ npm run validate:lesson -- <doc.json>   # validate a lesson.v1 document (Node 22
 
 `spec/openapi-public-v1.json` is the source contract; it is exported from the
 LingoChunk repo (`make generate-openapi-public`) and refreshed here on each API
-release. This copy was taken from LingoChunk commit `a53eb76a`.
+release. This copy was taken from LingoChunk commit `d85749b9`.
 
 ### Live smoke test
 

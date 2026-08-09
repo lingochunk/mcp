@@ -63,9 +63,11 @@ habits disagree, the brief wins.
    read-only and claims nothing.
 
    The optional `pack` argument picks the teaching pack the brief is assembled
-   from. Omit it and the server uses its default; pass one (e.g. `dialogue`)
-   only when the user asked for that teaching style, and then pass the SAME
-   value to the submit in step 5 so brief and part agree.
+   from. Omit it and the server uses its default (`dialogue`, what this
+   endpoint has always written with); pass one only when the user asked for
+   that teaching style. Either way the response carries a `pack_id` - pass it
+   back on the submit in step 5, so the part is stored against the pack it was
+   actually composed for.
 
 4. **Compose the lesson.** Write a lesson.v1 document from the brief on YOUR
    tokens - your own model and iteration budget, typically better than the
@@ -79,8 +81,8 @@ habits disagree, the brief wins.
    pre-check with `validate_lesson(document)` catches schema and
    declared-slice faults early, but needs the separate `lessons:write` scope
    and cannot see the section frame - skip it if the token lacks that scope.
-   Pass the `section_index` the brief gave you, the same `pack` you briefed
-   with (if any), and name your skill in
+   Pass the `section_index` the brief gave you, the brief's `pack_id` as
+   `pack`, and name your skill in
    `generator` (e.g. `{skill: "lingochunk-guided", version: "..."}`) for
    provenance. A successful submit attaches the lesson to the section and
    counts one part against the user's daily lesson-path budget. The response's

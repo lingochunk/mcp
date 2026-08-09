@@ -2119,6 +2119,23 @@ describe("lesson writer tools", () => {
     expect(lastUrl).not.toContain("pack");
   });
 
+  // The spec caps pack at 32 characters on both endpoints; rejecting locally
+  // turns a server 422 into a legible schema error before the request goes out.
+  it("rejects a pack id longer than the spec's 32-character cap", async () => {
+    const tooLong = "d".repeat(33);
+    await expect(
+      call("get_lesson_writer_brief", { submission_id: "abc/1", pack: tooLong }),
+    ).rejects.toThrow();
+    await expect(
+      call("submit_lesson_section", {
+        submission_id: "abc/1",
+        section_index: 0,
+        document: { format: "lesson.v1", blocks: [] },
+        pack: tooLong,
+      }),
+    ).rejects.toThrow();
+  });
+
   it("submit_lesson_section POSTs the document + generator to the section slot", async () => {
     const summary = {
       lesson_id: "l9",

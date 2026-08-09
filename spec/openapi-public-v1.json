@@ -4908,6 +4908,25 @@
               "type": "string",
               "title": "Submission Id"
             }
+          },
+          {
+            "name": "pack",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 32
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Teaching pack to write against; omit for the default (`dialogue`, what this endpoint has always used)",
+              "title": "Pack"
+            },
+            "description": "Teaching pack to write against; omit for the default (`dialogue`, what this endpoint has always used)"
           }
         ],
         "responses": {
@@ -7977,6 +7996,11 @@
             "title": "Focus",
             "description": "The teaching focus deterministically chosen for this section (comprehension | grammar | speaking | vocabulary)"
           },
+          "pack_id": {
+            "type": "string",
+            "title": "Pack Id",
+            "description": "Teaching pack these instructions came from; submit the lesson with the SAME pack, or it is graded against different pedagogy"
+          },
           "pack_version": {
             "type": "string",
             "title": "Pack Version",
@@ -8001,6 +8025,7 @@
         "required": [
           "section_index",
           "focus",
+          "pack_id",
           "pack_version",
           "instructions",
           "contract",
@@ -8334,6 +8359,19 @@
           "document": {
             "$ref": "#/components/schemas/LessonDocumentV1",
             "description": "The lesson.v1 document to attach"
+          },
+          "pack": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 32
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pack",
+            "description": "Teaching pack the document was composed against; omit for the default (`dialogue`). Pass back the brief's `pack_id`"
           },
           "generator": {
             "anyOf": [
