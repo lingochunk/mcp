@@ -4950,6 +4950,16 @@
               }
             }
           },
+          "403": {
+            "description": "The token lacks the scope this endpoint requires (plain `detail` body), or the requested pack is not available on this account (`pack_admin_only`; every pack other than the default `dialogue` is admin-only here, because a submitted part writes the shared syllabus)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GuidedErrorV1"
+                }
+              }
+            }
+          },
           "409": {
             "description": "The plan is not ready (`plan_not_ready`), the path is complete (`path_complete`), or the next section's transcript is empty (`section_has_no_sentences`)",
             "content": {
@@ -4961,27 +4971,17 @@
             }
           },
           "422": {
-            "description": "Validation Error",
+            "description": "No such teaching pack (`unknown_pack`). A malformed `pack` value (over 32 characters) returns FastAPI's own validation body instead, with no `code`",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/GuidedErrorV1"
                 }
               }
             }
           },
           "401": {
             "description": "Missing or invalid API token",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorV1"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "The token lacks the scope this endpoint requires",
             "content": {
               "application/json": {
                 "schema": {
@@ -5073,6 +5073,16 @@
               }
             }
           },
+          "403": {
+            "description": "The token lacks the scope this endpoint requires (plain `detail` body), or the requested pack is not available on this account (`pack_admin_only`; every pack other than the default `dialogue` is admin-only here, because a submitted part writes the shared syllabus)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GuidedErrorV1"
+                }
+              }
+            }
+          },
           "409": {
             "description": "Not the next empty section (`section_not_next`), a writer is already generating (`generation_in_flight`), the section was just filled (`section_taken`), the plan is not ready (`plan_not_ready`), or the section has no transcript (`section_has_no_sentences`)",
             "content": {
@@ -5094,7 +5104,7 @@
             }
           },
           "422": {
-            "description": "The document failed section validation; every failure is listed at once under `detail.errors`",
+            "description": "The document failed section validation; every failure is listed at once under `detail.errors`. The same status also carries `unknown_pack` (a `{code, message}` body with no `errors`) when `pack` names no teaching pack",
             "content": {
               "application/json": {
                 "schema": {
@@ -5105,16 +5115,6 @@
           },
           "401": {
             "description": "Missing or invalid API token",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorV1"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "The token lacks the scope this endpoint requires",
             "content": {
               "application/json": {
                 "schema": {
@@ -7994,7 +7994,7 @@
           "focus": {
             "type": "string",
             "title": "Focus",
-            "description": "The teaching focus deterministically chosen for this section (comprehension | grammar | speaking | vocabulary)"
+            "description": "The teaching focus deterministically chosen for this section. The value is a focus key of the pack this brief was built with, so the set depends on `pack_id` and is not fixed: the default `dialogue` pack picks one of comprehension | grammar | speaking | vocabulary, while a single-focus pack always answers with its own key"
           },
           "pack_id": {
             "type": "string",
