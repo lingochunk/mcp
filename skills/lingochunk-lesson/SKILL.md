@@ -183,8 +183,8 @@ that omits them renders flat. These are hard rules, not suggestions:
   grammar point). It is your voice, not the transcript's - never put quoted
   or translated sentence content in it (that is what `text`/`translation`
   are for), and use it sparingly: a note on every line reads as clutter. A
-  note may carry an `example`/`example_translation` pair (the Assimil note
-  shape): a FRESH illustrative sentence you author - not quoted from the
+  note may carry an `example`/`example_translation` pair (the dialogue-method
+  note shape): a FRESH illustrative sentence you author - not quoted from the
   transcript - with its translation, shown as an indented second line under
   the note. The same pair is available on `audio_slice` `notes`; `example`
   requires the note text, and `example_translation` requires `example`.
@@ -210,7 +210,7 @@ identical. The archetypes (recipes for the starred ones are below):
 | Listening-detail MCQ | `exercise_mcq` + `audio` + `position` | any level, checks a specific line |
 | Minimal-pair MCQ * | `exercise_mcq` + `audio` | morphology, separable prefixes, case, tense |
 | Back-chain ladder * | 3-4 `audio_slice` | one hard/long sentence; prosody; word order |
-| Assimil passive wave * | `prose` + `dialogue` | the Text stage, every level |
+| Passive wave * | `prose` + `dialogue` | the Text stage, every level |
 | Anticipation round * | `prose` + `audio_slice` pairs | cued recall, mid/high levels |
 | Grammar gap-fill | `exercise_gap_fill` | the grammar point itself, every lesson |
 | Vocabulary gap-fill | `exercise_gap_fill` + `wordbank` | vocabulary consolidation, low/mid |
@@ -218,7 +218,7 @@ identical. The archetypes (recipes for the starred ones are below):
 | Sentence reorder * | `exercise_order` | word order / clause structure, every level |
 | Dictation * | `exercise_dictation` | native-audio dictation, listening precision |
 | Shadowing * | `exercise_shadow` | pronunciation & prosody, the differentiator |
-| Translate / reconstruct * | `exercise_translate` | active recall, the Assimil second wave, mid/high levels |
+| Translate / reconstruct * | `exercise_translate` | active recall, the second wave, mid/high levels |
 | Production | `exercise_production` | active use, mid/high levels |
 | SRS practice round | `deck_practice` | closing consolidation, any level (max one, after the exercises) |
 
@@ -265,7 +265,7 @@ whole sentence"); never copy the words into the label, the display derives
 them. The schema needs `end > start` and `start >= 0`, and every window must
 sit inside the source slice.
 
-### Assimil passive wave
+### Passive wave (the dialogue method)
 
 Before the `dialogue` block in the Text stage, put an instruction `prose`
 that runs the passive wave: listen once without reading, then read while
@@ -339,10 +339,10 @@ product's core practice move inline in a lesson; use it to make a lesson end in
 real speaking. Pick 3-8 of the dialogue's best lines - the ones worth being
 able to say fluently - in the order they occur. Add `translation` per line.
 
-### Translate / reconstruct (the Assimil daily exercise)
+### Translate / reconstruct (the dialogue method's daily exercise)
 
-An `exercise_translate` with 1-6 `items`. It carries both Assimil's daily
-translate exercise and active-wave reconstruction: cue in one language, produce
+An `exercise_translate` with 1-6 `items`. It carries both the dialogue method's
+daily translate exercise and active-wave reconstruction: cue in one language, produce
 the other, compare with a model, replay the source. Two knobs and two item
 shapes:
 
@@ -351,7 +351,7 @@ shapes:
   the target - active production, the harder second-wave move).
 - `response`: `self_check` (default; the learner grades themselves against the
   model), `type`, `speak`, or `speak_then_type` (speak first, writing
-  optional - exactly Assimil's instruction).
+  optional - exactly the dialogue method's instruction).
 - ANCHORED item (`position` set): a live transcript sentence supplies the cue
   (target_to_meaning) or the exact answer (meaning_to_target, diffed like
   dictation). Nothing is copied into the document; `cue`/`model_answer` are
