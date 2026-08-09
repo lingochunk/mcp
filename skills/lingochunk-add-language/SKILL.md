@@ -346,12 +346,15 @@ Flow for one lesson:
    retry once. On 409 `stale_document`, the master changed: re-fetch the
    source and re-translate what moved.
 
-Flow for a guided path: `get_guided_translation_source` first;
-`put_guided_plan_translation` with the plan units and the source's
+Flow for a lesson path: `get_lesson_path_translation_source` first;
+`put_lesson_path_translation` with the plan units and the source's
 `plan_version` as `base_version` (once, before any section); then translate
 each section's `master_lesson_id` through steps 1-3 above and submit with
-`put_guided_section_translation(section_index=<the section's index FIELD>,
-base_version=<that lesson's version>)`. Pair plan units with sections by
+`put_lesson_section_translation(section_index=<the section's index FIELD>,
+base_version=<that lesson's version>)`. (These three were named
+`get_guided_translation_source`, `put_guided_plan_translation` and
+`put_guided_section_translation` before 0.14.0; the old names still work as
+deprecated aliases.) Pair plan units with sections by
 each section's `unit_path_prefix`, never by its `index` (they can differ).
 Sections go in any order; a section already translated is improved via
 `update_lesson`, never re-submitted.

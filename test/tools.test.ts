@@ -120,7 +120,7 @@ function textOf(result: CallToolResult): string {
 }
 
 describe("tool registration", () => {
-  it("registers all forty tools", () => {
+  it("registers all forty-seven tools", () => {
     expect([...tools.keys()].sort()).toEqual(
       [
         "add_card",
@@ -137,6 +137,9 @@ describe("tool registration", () => {
         "get_audio_url",
         "get_authoring_guide",
         "get_guided_path",
+        "get_lesson_path",
+        "get_lesson_path_translation_source",
+        "get_lesson_writer_brief",
         "get_guided_translation_source",
         "get_guided_writer_brief",
         "get_lesson",
@@ -152,6 +155,9 @@ describe("tool registration", () => {
         "list_library",
         "lookup_word",
         "plan_guided_path",
+        "plan_lesson_path",
+        "put_lesson_path_translation",
+        "put_lesson_section_translation",
         "put_guided_plan_translation",
         "put_guided_section_translation",
         "put_language_translations",
@@ -159,6 +165,7 @@ describe("tool registration", () => {
         "save_lesson",
         "search_examples",
         "submit_guided_lesson",
+        "submit_lesson_section",
         "update_annotation",
         "update_lesson",
         "validate_lesson",
@@ -178,10 +185,78 @@ describe("tool registration", () => {
     expect(stale).toEqual([]);
   });
 
-  it("the guided source's FLOW names both replacement tools", () => {
-    const flow = tools.get("get_guided_translation_source")!.description;
-    expect(flow).toContain("put_guided_plan_translation");
-    expect(flow).toContain("put_guided_section_translation");
+  it("the path translation source's FLOW names both replacement tools", () => {
+    const flow = tools.get("get_lesson_path_translation_source")!.description;
+    expect(flow).toContain("put_lesson_path_translation");
+    expect(flow).toContain("put_lesson_section_translation");
+  });
+});
+
+// The guided page was retired in 0.14.0 and the path tools took lesson-path
+// names. The old names stay registered as deprecated aliases so installed
+// skills keep working; these guards are the 0.12.0 pattern, one level up.
+describe("renamed lesson-path tools", () => {
+  const RENAMES: [deprecated: string, current: string][] = [
+    ["plan_guided_path", "plan_lesson_path"],
+    ["get_guided_path", "get_lesson_path"],
+    ["get_guided_writer_brief", "get_lesson_writer_brief"],
+    ["submit_guided_lesson", "submit_lesson_section"],
+    ["get_guided_translation_source", "get_lesson_path_translation_source"],
+    ["put_guided_plan_translation", "put_lesson_path_translation"],
+    ["put_guided_section_translation", "put_lesson_section_translation"],
+  ];
+
+  it("registers both names for every rename", () => {
+    for (const [deprecated, current] of RENAMES) {
+      expect(tools.has(deprecated), `${deprecated} missing`).toBe(true);
+      expect(tools.has(current), `${current} missing`).toBe(true);
+    }
+  });
+
+  it("each alias declares its deprecation and points at the new name", () => {
+    for (const [deprecated, current] of RENAMES) {
+      const description = tools.get(deprecated)!.description;
+      expect(description.startsWith(`Deprecated alias of ${current};`)).toBe(
+        true,
+      );
+      expect(description).toContain("will be removed in a future release");
+    }
+  });
+
+  it("each alias shares the new tool's schema, so the pair cannot drift", () => {
+    for (const [deprecated, current] of RENAMES) {
+      expect(Object.keys(tools.get(deprecated)!.schema).sort()).toEqual(
+        Object.keys(tools.get(current)!.schema).sort(),
+      );
+    }
+  });
+
+  // Guard (the 0.12.0 pattern): a NON-deprecated description that still names
+  // an old tool sends the agent at a name that is on its way out. Aliases are
+  // exempt - naming themselves is the whole point of the deprecation notice.
+  it("no live description points at a deprecated tool name", () => {
+    const deprecated = new Set(RENAMES.map(([old]) => old));
+    const offenders: string[] = [];
+    for (const [name, tool] of tools.entries()) {
+      if (deprecated.has(name)) continue;
+      for (const [old] of RENAMES) {
+        // No old name is a substring of another old name, nor of any new one,
+        // so a plain includes() is an exact check.
+        if (tool.description.includes(old)) offenders.push(`${name} -> ${old}`);
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it("the descriptions still name the unchanged guided:* scopes", () => {
+    expect(tools.get("get_lesson_path")!.description).toContain("guided:read");
+    for (const name of [
+      "plan_lesson_path",
+      "get_lesson_writer_brief",
+      "submit_lesson_section",
+    ]) {
+      expect(tools.get(name)!.description).toContain("guided:write");
+    }
   });
 });
 
@@ -1518,7 +1593,7 @@ describe("language tools", () => {
     });
   });
 
-  it("put_guided_plan_translation PUTs plan units with the plan version", async () => {
+  it("put_lesson_path_translation PUTs plan units with the plan version", async () => {
     mockFetch(
       jsonResponse({
         language: "fr",
@@ -1526,7 +1601,7 @@ describe("language tools", () => {
         section_count: 3,
       }),
     );
-    await call("put_guided_plan_translation", {
+    await call("put_lesson_path_translation", {
       submission_id: "s1",
       language: "fr",
       base_version: "2026-07-22T00:00:00+00:00",
@@ -1541,7 +1616,7 @@ describe("language tools", () => {
     });
   });
 
-  it("put_guided_section_translation PUTs to the section endpoint", async () => {
+  it("put_lesson_section_translation PUTs to the section endpoint", async () => {
     mockFetch(
       jsonResponse({
         lesson_id: "ed-2",
@@ -1550,7 +1625,7 @@ describe("language tools", () => {
         unknown_lemmas: [],
       }),
     );
-    await call("put_guided_section_translation", {
+    await call("put_lesson_section_translation", {
       submission_id: "s1",
       section_index: 2,
       language: "fr",
@@ -1796,8 +1871,8 @@ describe("annotation tools", () => {
   });
 });
 
-describe("guided path tools", () => {
-  it("plan_guided_path POSTs the trigger, polls the job, then reports ready", async () => {
+describe("lesson path tools", () => {
+  it("plan_lesson_path POSTs the trigger, polls the job, then reports ready", async () => {
     vi.useFakeTimers();
     try {
       mockFetchSequence([
@@ -1805,19 +1880,19 @@ describe("guided path tools", () => {
         jsonResponse({ status: "processing", progress: 30 }),
         jsonResponse({ status: "completed", progress: 100 }),
       ]);
-      const p = call("plan_guided_path", { submission_id: "s1" });
+      const p = call("plan_lesson_path", { submission_id: "s1" });
       await vi.advanceTimersByTimeAsync(2100);
       const payload = JSON.parse(textOf(await p));
       expect(payload.status).toBe("ready");
       expect(payload.job_id).toBe("gp1");
-      expect(payload.message).toContain("get_guided_path");
+      expect(payload.message).toContain("get_lesson_path");
       expect(lastUrl).toBe("https://api.test/api/v1/jobs/gp1");
     } finally {
       vi.useRealTimers();
     }
   });
 
-  it("plan_guided_path returns friendly pending guidance when the budget expires", async () => {
+  it("plan_lesson_path returns friendly pending guidance when the budget expires", async () => {
     vi.useFakeTimers();
     try {
       // Trigger returns a job, then the job stays processing forever: a fresh
@@ -1832,24 +1907,24 @@ describe("guided path tools", () => {
             : jsonResponse({ status: "processing" });
         }),
       );
-      const p = call("plan_guided_path", { submission_id: "s1" });
+      const p = call("plan_lesson_path", { submission_id: "s1" });
       await vi.advanceTimersByTimeAsync(61_000);
       const payload = JSON.parse(textOf(await p));
       expect(payload.status).toBe("pending");
-      expect(payload.message).toContain("get_guided_path");
+      expect(payload.message).toContain("get_lesson_path");
     } finally {
       vi.useRealTimers();
     }
   });
 
-  it("plan_guided_path treats a 409 plan_ready as a success (calling twice is safe)", async () => {
+  it("plan_lesson_path treats a 409 plan_ready as a success (calling twice is safe)", async () => {
     mockFetch(
       jsonResponse(
         { detail: { code: "plan_ready", message: "A ready guided path exists." } },
         409,
       ),
     );
-    const result = await call("plan_guided_path", { submission_id: "abc/1" });
+    const result = await call("plan_lesson_path", { submission_id: "abc/1" });
     expect(lastUrl).toBe(
       "https://api.test/api/v1/submissions/abc%2F1/guided/plan",
     );
@@ -1857,10 +1932,10 @@ describe("guided path tools", () => {
     expect(result.isError).toBeFalsy();
     const payload = JSON.parse(textOf(result));
     expect(payload.status).toBe("ready");
-    expect(payload.message).toContain("get_guided_path");
+    expect(payload.message).toContain("get_lesson_path");
   });
 
-  it("plan_guided_path treats a 409 plan_in_progress as pending", async () => {
+  it("plan_lesson_path treats a 409 plan_in_progress as pending", async () => {
     mockFetch(
       jsonResponse(
         {
@@ -1872,26 +1947,26 @@ describe("guided path tools", () => {
         409,
       ),
     );
-    const result = await call("plan_guided_path", { submission_id: "s1" });
+    const result = await call("plan_lesson_path", { submission_id: "s1" });
     expect(result.isError).toBeFalsy();
     const payload = JSON.parse(textOf(result));
     expect(payload.status).toBe("pending");
-    expect(payload.message).toContain("get_guided_path");
+    expect(payload.message).toContain("get_lesson_path");
   });
 
-  it("plan_guided_path reports a failed planner job for retry", async () => {
+  it("plan_lesson_path reports a failed planner job for retry", async () => {
     mockFetchSequence([
       jsonResponse({ job_id: "gp2" }),
       jsonResponse({ status: "failed", error: "planner boom" }),
     ]);
-    const result = await call("plan_guided_path", { submission_id: "s1" });
+    const result = await call("plan_lesson_path", { submission_id: "s1" });
     const payload = JSON.parse(textOf(result));
     expect(payload.status).toBe("failed");
     expect(payload.error).toBe("planner boom");
-    expect(payload.message).toContain("plan_guided_path again");
+    expect(payload.message).toContain("plan_lesson_path again");
   });
 
-  it("plan_guided_path surfaces a 429 guided_daily_limit message and Retry-After", async () => {
+  it("plan_lesson_path surfaces a 429 guided_daily_limit message and Retry-After", async () => {
     // The guided detail is a {code, message} OBJECT, not a string: its message
     // must surface cleanly, never as [object Object].
     mockFetch(
@@ -1906,7 +1981,7 @@ describe("guided path tools", () => {
         { "retry-after": "3600" },
       ),
     );
-    const result = await call("plan_guided_path", { submission_id: "s1" });
+    const result = await call("plan_lesson_path", { submission_id: "s1" });
     expect(result.isError).toBe(true);
     const text = textOf(result);
     expect(text).toContain("You have reached today's guided limit.");
@@ -1915,7 +1990,7 @@ describe("guided path tools", () => {
     expect(text).toContain("3600");
   });
 
-  it("plan_guided_path surfaces a 422 submission_too_long message", async () => {
+  it("plan_lesson_path surfaces a 422 submission_too_long message", async () => {
     mockFetch(
       jsonResponse(
         {
@@ -1927,14 +2002,14 @@ describe("guided path tools", () => {
         422,
       ),
     );
-    const result = await call("plan_guided_path", { submission_id: "s1" });
+    const result = await call("plan_lesson_path", { submission_id: "s1" });
     expect(result.isError).toBe(true);
     const text = textOf(result);
     expect(text).toContain("This episode is too long to plan.");
     expect(text).not.toContain("[object Object]");
   });
 
-  it("get_guided_path GETs /submissions/{id}/guided and returns the JSON", async () => {
+  it("get_lesson_path GETs /submissions/{id}/guided and returns the JSON", async () => {
     const body = {
       status: "ready",
       error: null,
@@ -1959,15 +2034,15 @@ describe("guided path tools", () => {
       last_generation_error: null,
     };
     mockFetch(jsonResponse(body));
-    const result = await call("get_guided_path", { submission_id: "abc/1" });
+    const result = await call("get_lesson_path", { submission_id: "abc/1" });
     expect(lastUrl).toBe("https://api.test/api/v1/submissions/abc%2F1/guided");
     expect(lastInit.method).toBe("GET");
     expect(JSON.parse(textOf(result))).toEqual(body);
   });
 });
 
-describe("guided writer tools", () => {
-  it("get_guided_writer_brief GETs /guided/brief and returns the JSON", async () => {
+describe("lesson writer tools", () => {
+  it("get_lesson_writer_brief GETs /guided/brief and returns the JSON", async () => {
     const body = {
       section_index: 2,
       focus: "grammar",
@@ -1994,7 +2069,7 @@ describe("guided writer tools", () => {
       },
     };
     mockFetch(jsonResponse(body));
-    const result = await call("get_guided_writer_brief", {
+    const result = await call("get_lesson_writer_brief", {
       submission_id: "abc/1",
     });
     expect(lastUrl).toBe(
@@ -2004,7 +2079,7 @@ describe("guided writer tools", () => {
     expect(JSON.parse(textOf(result))).toEqual(body);
   });
 
-  it("get_guided_writer_brief surfaces a 409 plan_not_ready with its code", async () => {
+  it("get_lesson_writer_brief surfaces a 409 plan_not_ready with its code", async () => {
     mockFetch(
       jsonResponse(
         {
@@ -2016,17 +2091,35 @@ describe("guided writer tools", () => {
         409,
       ),
     );
-    const result = await call("get_guided_writer_brief", {
+    const result = await call("get_lesson_writer_brief", {
       submission_id: "s1",
     });
     expect(result.isError).toBe(true);
     const text = textOf(result);
-    expect(text).toContain("The guided path is not planned yet.");
+    // The server's own detail, verbatim, then our remediation hint.
+    expect(text).toContain("LingoChunk API error 409");
     expect(text).not.toContain("[object Object]");
-    expect(text).toContain("plan_guided_path");
+    expect(text).toContain("Call plan_lesson_path, then get_lesson_path");
   });
 
-  it("submit_guided_lesson POSTs the document + generator to the section slot", async () => {
+  it("get_lesson_writer_brief sends pack as a query parameter when given", async () => {
+    mockFetch(jsonResponse({ section_index: 0 }));
+    await call("get_lesson_writer_brief", {
+      submission_id: "abc/1",
+      pack: "dialogue",
+    });
+    expect(lastUrl).toBe(
+      "https://api.test/api/v1/submissions/abc%2F1/guided/brief?pack=dialogue",
+    );
+  });
+
+  it("get_lesson_writer_brief omits pack entirely when unset (server default)", async () => {
+    mockFetch(jsonResponse({ section_index: 0 }));
+    await call("get_lesson_writer_brief", { submission_id: "abc/1" });
+    expect(lastUrl).not.toContain("pack");
+  });
+
+  it("submit_lesson_section POSTs the document + generator to the section slot", async () => {
     const summary = {
       lesson_id: "l9",
       app_url: "https://app.test/lessons/l9",
@@ -2036,7 +2129,7 @@ describe("guided writer tools", () => {
     };
     mockFetch(jsonResponse(summary, 201));
     const document = { format: "lesson.v1", blocks: [] };
-    const result = await call("submit_guided_lesson", {
+    const result = await call("submit_lesson_section", {
       submission_id: "abc/1",
       section_index: 2,
       document,
@@ -2053,7 +2146,59 @@ describe("guided writer tools", () => {
     expect(JSON.parse(textOf(result))).toEqual(summary);
   });
 
-  it("submit_guided_lesson surfaces every invalid_document error legibly", async () => {
+  it("submit_lesson_section carries pack in the body, and omits it when unset", async () => {
+    const document = { format: "lesson.v1", blocks: [] };
+    mockFetch(jsonResponse({ lesson_id: "l9" }, 201));
+    await call("submit_lesson_section", {
+      submission_id: "abc/1",
+      section_index: 0,
+      document,
+      pack: "dialogue",
+    });
+    expect(JSON.parse(String(lastInit.body))).toEqual({
+      document,
+      pack: "dialogue",
+    });
+
+    mockFetch(jsonResponse({ lesson_id: "l9" }, 201));
+    await call("submit_lesson_section", {
+      submission_id: "abc/1",
+      section_index: 0,
+      document,
+    });
+    expect(JSON.parse(String(lastInit.body))).toEqual({ document });
+  });
+
+  // The deprecated aliases share the handler instance, so this proves the pair
+  // cannot diverge in behaviour, not merely in description.
+  it("the deprecated aliases reach the same endpoints as the new names", async () => {
+    mockFetch(jsonResponse({ status: "ready" }));
+    await call("get_guided_path", { submission_id: "abc/1" });
+    expect(lastUrl).toBe("https://api.test/api/v1/submissions/abc%2F1/guided");
+
+    mockFetch(jsonResponse({ section_index: 1 }));
+    await call("get_guided_writer_brief", {
+      submission_id: "abc/1",
+      pack: "dialogue",
+    });
+    expect(lastUrl).toBe(
+      "https://api.test/api/v1/submissions/abc%2F1/guided/brief?pack=dialogue",
+    );
+
+    const document = { format: "lesson.v1", blocks: [] };
+    mockFetch(jsonResponse({ lesson_id: "l9" }, 201));
+    await call("submit_guided_lesson", {
+      submission_id: "abc/1",
+      section_index: 3,
+      document,
+    });
+    expect(lastUrl).toBe(
+      "https://api.test/api/v1/submissions/abc%2F1/guided/sections/3/lesson",
+    );
+    expect(JSON.parse(String(lastInit.body))).toEqual({ document });
+  });
+
+  it("submit_lesson_section surfaces every invalid_document error legibly", async () => {
     // The 422 lists EVERY problem at once; each must be readable (code +
     // message + locator), never collapsed to "[object Object]".
     mockFetch(
@@ -2085,7 +2230,7 @@ describe("guided writer tools", () => {
         422,
       ),
     );
-    const result = await call("submit_guided_lesson", {
+    const result = await call("submit_lesson_section", {
       submission_id: "s1",
       section_index: 0,
       document: { format: "lesson.v1", blocks: [] },
@@ -2098,10 +2243,10 @@ describe("guided writer tools", () => {
     expect(text).toContain("audio_outside_slice");
     expect(text).toContain("missing_field: Field is required. (blocks.0.kind)");
     // The remediation nudges fixing them all in one pass.
-    expect(text).toContain("submit_guided_lesson again");
+    expect(text).toContain("submit_lesson_section again");
   });
 
-  it("submit_guided_lesson treats a 409 section_taken as a re-brief cue", async () => {
+  it("submit_lesson_section treats a 409 section_taken as a re-brief cue", async () => {
     mockFetch(
       jsonResponse(
         {
@@ -2113,7 +2258,7 @@ describe("guided writer tools", () => {
         409,
       ),
     );
-    const result = await call("submit_guided_lesson", {
+    const result = await call("submit_lesson_section", {
       submission_id: "s1",
       section_index: 1,
       document: { format: "lesson.v1", blocks: [] },
@@ -2121,7 +2266,7 @@ describe("guided writer tools", () => {
     expect(result.isError).toBe(true);
     const text = textOf(result);
     expect(text).toContain("This section already has a lesson.");
-    expect(text).toContain("get_guided_writer_brief");
+    expect(text).toContain("get_lesson_writer_brief");
     expect(text).not.toContain("[object Object]");
   });
 });

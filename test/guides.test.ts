@@ -58,10 +58,19 @@ describe("embedded authoring guides", () => {
   });
 
   it("the guided guide teaches the loop, not the pedagogy", () => {
-    // Markers unique to the loop-only guided skill: it names the loop tools and
-    // states plainly that the pedagogy arrives at runtime in the brief.
-    expect(GUIDES.guided.body).toContain("get_guided_writer_brief");
+    // Markers unique to the loop-only lesson-path skill: it names the loop
+    // tools by their CURRENT names (renamed in 0.14.0; the topic value stays
+    // 'guided') and states plainly that the pedagogy arrives at runtime.
+    expect(GUIDES.guided.body).toContain("get_lesson_writer_brief");
+    expect(GUIDES.guided.body).toContain("submit_lesson_section");
     expect(GUIDES.guided.body).toContain("The pedagogy arrives at runtime");
+  });
+
+  it("the guided guide keeps the unchanged guided:* scope strings", () => {
+    // Live tokens carry these scopes verbatim; renaming the tools must not
+    // have renamed the scopes the skill tells the user to mint.
+    expect(GUIDES.guided.body).toContain("guided:read");
+    expect(GUIDES.guided.body).toContain("guided:write");
   });
 
   // Drift guard: the committed src/generated/guides.ts must match what the

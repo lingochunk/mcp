@@ -1,11 +1,11 @@
 ---
 name: lingochunk-guided
-description: Write the parts of a LingoChunk guided study path yourself, following the server's runtime writer brief. Use when the user wants to build, generate, write or fill in a guided path (or its sections/parts) over one of their LingoChunk episodes, so the parts render in the app exactly like internally generated ones. This skill teaches only the plan-brief-compose-submit loop; the actual pedagogy arrives inside each brief at runtime.
+description: Write the parts of a LingoChunk lesson path yourself, following the server's runtime writer brief. Use when the user wants to build, generate, write or fill in a lesson path (or a guided path, its older name) over one of their LingoChunk episodes, so the parts render in the app exactly like internally generated ones. This skill teaches only the plan-brief-compose-submit loop; the actual pedagogy arrives inside each brief at runtime.
 ---
 
-# Guided path writer
+# Lesson path writer
 
-A LingoChunk **guided path** turns one episode into an ordered sequence of
+A LingoChunk **lesson path** turns one episode into an ordered sequence of
 study sections, each holding a short lesson focused on one thing
 (comprehension, grammar, speaking or vocabulary). The app can generate those
 lessons with its own internal writer; this skill lets you write them instead,
@@ -17,43 +17,55 @@ same, and quality is guaranteed to match or beat the internal writer.
 Uses the `lingochunk` MCP tools. If they are not available, tell the user to add
 the LingoChunk MCP server (see the plugin README) and stop.
 
+> **Tool names changed in 0.14.0.** A lesson path used to be called a guided
+> path, and the tools were named after it. Use the names in this skill. The old
+> `plan_guided_path`, `get_guided_path`, `get_guided_writer_brief` and
+> `submit_guided_lesson` still work as deprecated aliases of the same
+> endpoints, and will be removed in a future release. The `guided:read` and
+> `guided:write` SCOPES are unchanged - existing tokens keep working.
+
 ## When to use
 
-- "Build a guided path over episode 12 and write the lessons."
-- "Fill in the next part of my guided path for this episode."
+- "Build a lesson path over episode 12 and write the lessons."
+- "Fill in the next part of my lesson path for this episode."
 - "Generate the whole guided course for yesterday's episode, but you write it."
 
-For a single standalone lesson (not a section of a guided path), use
+For a single standalone lesson (not a section of a lesson path), use
 `lingochunk-lesson` instead. For a conversation about an episode rather than an
 artefact, use `lingochunk-discuss`.
 
 ## The one thing to understand
 
 **The pedagogy arrives at runtime, in the brief.** This skill deliberately does
-NOT teach how to write a guided part - no arc, no per-focus recipes, no level
+NOT teach how to write a part - no arc, no per-focus recipes, no level
 rules. All of that is assembled server-side for the specific episode, level and
-section, and handed to you inside `get_guided_writer_brief`. Follow the brief's
+section, and handed to you inside `get_lesson_writer_brief`. Follow the brief's
 instructions over any generic lesson instincts you have. When the brief and your
 habits disagree, the brief wins.
 
 ## The loop
 
-1. **Plan the path.** `plan_guided_path(submission_id)` triggers the
+1. **Plan the path.** `plan_lesson_path(submission_id)` triggers the
    server-side planner (it segments the episode into sections and picks each
    section's focus) and polls it to ready. Planning is server-side and cheap; it
-   spends none of your tokens but DOES count against the user's daily guided
-   budget. Calling it when a path already exists is safe.
+   spends none of your tokens but DOES count against the user's daily
+   lesson-path budget. Calling it when a path already exists is safe.
 
-2. **Read the path.** `get_guided_path(submission_id)` returns the ordered
+2. **Read the path.** `get_lesson_path(submission_id)` returns the ordered
    sections, which one is next, and which already have a lesson. Use it to see
    progress and to know when the path is complete.
 
-3. **Fetch the brief.** `get_guided_writer_brief(submission_id)` returns the
+3. **Fetch the brief.** `get_lesson_writer_brief(submission_id)` returns the
    COMPLETE briefing for the NEXT unwritten section: the `instructions` to
    follow, the document `contract` (the lesson.v1 schema reference), and the
    `materials` - the source `sentences` (with translations and timings), the
    `plan_entry`, the `level`, and the learner's `known_lemmas`. The brief is
    read-only and claims nothing.
+
+   The optional `pack` argument picks the teaching pack the brief is assembled
+   from. Omit it and the server uses its default; pass one (e.g. `dialogue`)
+   only when the user asked for that teaching style, and then pass the SAME
+   value to the submit in step 5 so brief and part agree.
 
 4. **Compose the lesson.** Write a lesson.v1 document from the brief on YOUR
    tokens - your own model and iteration budget, typically better than the
@@ -61,26 +73,29 @@ habits disagree, the brief wins.
    sentences; do not invent lines or reach outside the section.
 
 5. **Check, then submit.** Review your document against the contract, then
-   `submit_guided_lesson(submission_id, section_index, document, generator)`.
+   `submit_lesson_section(submission_id, section_index, document, generator)`.
    Submit is the validator of record and reports every problem at once,
    including the section-boundary checks only it can run. An optional
    pre-check with `validate_lesson(document)` catches schema and
    declared-slice faults early, but needs the separate `lessons:write` scope
    and cannot see the section frame - skip it if the token lacks that scope.
-   Pass the `section_index` the brief gave you, and name your skill in
+   Pass the `section_index` the brief gave you, the same `pack` you briefed
+   with (if any), and name your skill in
    `generator` (e.g. `{skill: "lingochunk-guided", version: "..."}`) for
    provenance. A successful submit attaches the lesson to the section and
-   counts one part against the user's daily guided budget. The response's
+   counts one part against the user's daily lesson-path budget. The response's
    `unknown_lemmas` is ADVISORY: the lesson saved; those lemmas simply lose
    their Words-tab crosslink (fix and update later if you care).
 
-6. **Repeat** from step 2 until `get_guided_path` shows every section written.
+6. **Repeat** from step 2 until `get_lesson_path` shows every section written.
 
 ## Scopes
 
-- `guided:read` - `get_guided_path`.
-- `guided:write` - `plan_guided_path`, `get_guided_writer_brief`,
-  `submit_guided_lesson`. The brief sits under the WRITE scope because it
+The scope strings are historical and unchanged; only the tool names moved.
+
+- `guided:read` - `get_lesson_path`.
+- `guided:write` - `plan_lesson_path`, `get_lesson_writer_brief`,
+  `submit_lesson_section`. The brief sits under the WRITE scope because it
   carries the writing instructions; only a caller intending to write needs it.
 - `lessons:write` - only needed for the OPTIONAL `validate_lesson` pre-check
   in step 5; submit itself never requires it.
@@ -91,11 +106,11 @@ token with that scope) via LingoChunk -> Settings -> API tokens.
 ## Budget and economics
 
 - **Planning** runs on the server (Gemini) and is cheap, but each plan counts
-  against the user's daily guided budget.
+  against the user's daily lesson-path budget.
 - **Writing** happens on YOUR tokens - the composition in step 4 spends none of
   LingoChunk's AI budget.
 - **Each successful submit** counts as one generated part against the same daily
-  guided budget the in-app button uses - one budget per user, shared. A 429
+  budget the in-app button uses - one budget per user, shared. A 429
   `guided_daily_limit` means it is spent; it resets the next day.
 
 ## Handling conflicts and errors
@@ -104,7 +119,7 @@ All conflicts arrive as a structured `{code, message}` detail - branch on the
 code:
 
 - **409 `plan_not_ready`** (from the brief): the path is not planned. Run
-  `plan_guided_path` and wait for `get_guided_path` to read `ready` first.
+  `plan_lesson_path` and wait for `get_lesson_path` to read `ready` first.
 - **409 `path_complete`** (from the brief): every section already has a lesson.
   You are done.
 - **409 `section_has_no_sentences`**: the next section has no transcript
@@ -114,7 +129,7 @@ code:
   expects.
 - **409 `section_taken` / `generation_in_flight`** (from submit): the in-app
   writer reached this section first. The brief claimed nothing, so this is
-  expected in a race - just call `get_guided_writer_brief` again for the next
+  expected in a race - just call `get_lesson_writer_brief` again for the next
   section; do not retry the same submit.
 - **413 `document_too_large`**: shorten the document and resubmit.
 - **422 `invalid_document`**: the response lists EVERY problem at once (the same
@@ -125,8 +140,8 @@ code:
   section's time range), and `language_mismatch` /
   `translation_language_mismatch` mean the document's languages must equal the
   brief's `materials.language` / `materials.translation_language` verbatim.
-- **429 `guided_daily_limit`**: the daily guided budget is spent; try again the
-  next day.
+- **429 `guided_daily_limit`**: the daily lesson-path budget is spent; try again
+  the next day.
 
 ## Rules
 
@@ -142,6 +157,6 @@ code:
   out-of-range reference is rejected, not stored.
 - **Next-only.** The brief and submit both target the next unwritten section.
   Do not try to jump ahead; write in order.
-- **Completing parts feeds the app.** Each attached lesson updates the guided
-  page, the learner's remembered progress and the second wave, exactly as an
+- **Completing parts feeds the app.** Each attached lesson updates the Lessons
+  tab, the learner's remembered progress and the second wave, exactly as an
   internally generated part would.

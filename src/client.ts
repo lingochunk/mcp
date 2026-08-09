@@ -1036,10 +1036,14 @@ export class LingoChunkClient {
    *  materials (source sentences, plan entry, level, known lemmas). Read-only
    *  and claims nothing. Guided conflicts arrive as a `{code, message}` detail:
    *  409 plan_not_ready / path_complete / section_has_no_sentences. Requires
-   *  the guided:write scope (the brief carries the pack). */
-  getGuidedWriterBrief(submissionId: string): Promise<unknown> {
+   *  the guided:write scope (the brief carries the pack). `pack` picks the
+   *  teaching pack the brief is assembled from; omitted means the server's
+   *  default. The endpoint path stays /guided/ - only the TOOL names moved to
+   *  lesson-path wording. */
+  getGuidedWriterBrief(submissionId: string, pack?: string): Promise<unknown> {
     return this.getJson(
       `/submissions/${encodeURIComponent(submissionId)}/guided/brief`,
+      pack === undefined ? undefined : { pack },
     );
   }
 
@@ -1058,6 +1062,7 @@ export class LingoChunkClient {
     body: {
       document: unknown;
       generator?: { skill?: string; version?: string };
+      pack?: string;
     },
   ): Promise<unknown> {
     return this.postJson(

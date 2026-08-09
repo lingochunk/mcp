@@ -47,12 +47,12 @@ For every learner:
    with a different grammar point per lesson and ramping difficulty.
    Example: *"Turn this 20-minute episode into a four-lesson course, A2 to
    B1."*
-6. **Build a guided study path** (topic `guided`) - the app segments an
-   episode into ordered study sections and you write each part following the
-   server's runtime brief; the parts render natively like internally
-   generated ones, feeding the guided page and remembered progress. Planning
-   is server-side; the writing runs on this agent.
-   Example: *"Build a guided path over episode 12 and write the lessons."*
+6. **Build a lesson path over a whole episode** (topic `guided`) - the app
+   segments an episode into ordered study sections and you write each part
+   following the server's runtime brief; the parts render natively like
+   internally generated ones, feeding the Lessons tab and remembered progress.
+   Planning is server-side; the writing runs on this agent.
+   Example: *"Build a lesson path over episode 12 and write the lessons."*
 7. **Make flashcards and export to Anki** (topic `cards`) - native-grade
    cards anchored to verbatim sentences (highlight/blur painting, native
    audio clip), plus `.apkg` deck export.

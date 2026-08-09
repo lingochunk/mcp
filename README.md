@@ -59,17 +59,33 @@ compose good lessons, cards and annotations.
 | `discard_language_draft` | `translations:write` | Deletes the in-progress draft rows for a language (destructive; never a committed sibling). |
 | `get_lesson_translation_source` | `translations:write` | Everything needed to translate ONE lesson into one language: its meta-language strings as path-addressed units (each `render` or `adapt`), the sibling/edition state, and the `version` token to echo back. Target-language text passes through unchanged. |
 | `put_lesson_translation` | `translations:write` | Saves your translated units as a language EDITION of the lesson on the sibling submission - target text, structure and answers stay byte-identical by construction. A 400 lists every problem at once; `base_version` guards a concurrent edit. |
-| `get_guided_translation_source` | `translations:write` | The same for a whole guided path: the plan's units plus per-section state (`master_lesson_id`, `unit_path_prefix`) and the `plan_version` token. |
-| `put_guided_plan_translation` | `translations:write` | Mints the sibling's guided plan from the master's translated plan units - once, before any section. Structure (positions, order, focus, minutes) is copied server-side. |
-| `put_guided_section_translation` | `translations:write` | Attaches ONE translated guided part to the sibling's plan, keyed by the section's `index` field and that lesson's own `base_version`. Sections go in any order. |
+| `get_lesson_path_translation_source` | `translations:write` | The same for a whole lesson path: the plan's units plus per-section state (`master_lesson_id`, `unit_path_prefix`) and the `plan_version` token. |
+| `put_lesson_path_translation` | `translations:write` | Mints the sibling's lesson-path plan from the master's translated plan units - once, before any section. Structure (positions, order, focus, minutes) is copied server-side. |
+| `put_lesson_section_translation` | `translations:write` | Attaches ONE translated lesson-path part to the sibling's plan, keyed by the section's `index` field and that lesson's own `base_version`. Sections go in any order. |
 | `list_annotations` | `content:read` | An episode's creator annotations (each a markdown note on a transcript sentence span), plus `count` and `max_annotations` so you can budget and avoid duplicates. |
 | `create_annotation` | `annotations:write` | Attaches a markdown creator note to a sentence span (Unicode code-point offsets into the sentence's `display`, or a whole-sentence note); the response echoes `selected_text` to verify the span. |
 | `update_annotation` | `annotations:write` | Replaces one annotation's note in place (the anchor stays put). |
 | `delete_annotation` | `annotations:write` | Deletes one annotation (destructive); also how you fix a mis-anchored span before re-creating it. |
-| `plan_guided_path` | `guided:write` | Starts (or reports) the server-side plan for a guided study path over an episode: the sections, their sentence ranges and their teaching focus. Poll it; calling twice while one is in flight is safe. |
-| `get_guided_path` | `guided:read` | The current guided path: plan status, every section with its bounds, focus and whether a part has been written for it yet. |
-| `get_guided_writer_brief` | `guided:write` | Claims one section and returns the runtime brief for it: the sentences, the target vocabulary, the audio windows and the pedagogy this part must follow. The brief - not this repo - is where the guided craft rules live. |
-| `submit_guided_lesson` | `guided:write` | Submits the written part back against its brief; the server validates it and renders it in the app exactly like an internally generated one. |
+| `plan_lesson_path` | `guided:write` | Starts (or reports) the server-side plan for a lesson path over an episode: the sections, their sentence ranges and their teaching focus. Poll it; calling twice while one is in flight is safe. |
+| `get_lesson_path` | `guided:read` | The current lesson path: plan status, every section with its bounds, focus and whether a part has been written for it yet. |
+| `get_lesson_writer_brief` | `guided:write` | Returns the runtime brief for the next unwritten section: the sentences, the target vocabulary, the audio windows and the pedagogy this part must follow (optionally for a named teaching `pack`). The brief - not this repo - is where the craft rules live. |
+| `submit_lesson_section` | `guided:write` | Submits the written part back against its brief (pass the same `pack` you briefed with); the server validates it and renders it in the app exactly like an internally generated one. |
+
+**Renamed in 0.14.0.** The guided page is retired and the Lessons tab is the
+one learner path, so the path tools carry lesson-path names. The old names are
+still registered as deprecated aliases of the same endpoints and will be
+removed in a future release; the `guided:read` / `guided:write` scopes are
+unchanged, so existing tokens keep working.
+
+| Deprecated alias | Use instead |
+|---|---|
+| `plan_guided_path` | `plan_lesson_path` |
+| `get_guided_path` | `get_lesson_path` |
+| `get_guided_writer_brief` | `get_lesson_writer_brief` |
+| `submit_guided_lesson` | `submit_lesson_section` |
+| `get_guided_translation_source` | `get_lesson_path_translation_source` |
+| `put_guided_plan_translation` | `put_lesson_path_translation` |
+| `put_guided_section_translation` | `put_lesson_section_translation` |
 
 Plus nine skills:
 
@@ -84,7 +100,7 @@ Plus nine skills:
   collection) into coherent parts, creates a course, then builds N lessons via
   the lesson skill with a different grammar point and ramping difficulty per
   lesson, each filed under the course in order.
-- **`lingochunk-guided`** - writes the parts of a guided study path yourself,
+- **`lingochunk-guided`** - writes the parts of a lesson path yourself,
   following the plan-brief-compose-submit loop, so they render exactly like
   internally generated ones. It teaches only the loop: the pedagogy for each
   part arrives inside its brief at runtime.
@@ -338,7 +354,7 @@ src/                                    the MCP server (TypeScript, stdio)
 skills/lingochunk-overview/             the "what can I do?" tour skill
 skills/lingochunk-lesson/               the coursebook lesson skill
 skills/lingochunk-course/               the multi-lesson course planner skill
-skills/lingochunk-guided/               the guided-path writer-loop skill
+skills/lingochunk-guided/               the lesson-path writer-loop skill
 skills/lingochunk-cards/                the flashcard (card.v1) skill
 skills/lingochunk-discuss/              the "discuss an episode" skill
 skills/lingochunk-add-language/         the add-language / draft-translation / cold-fill skill
