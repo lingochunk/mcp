@@ -99,7 +99,7 @@ function errorResult(err: unknown): CallToolResult {
         "get_lesson_path until it is ready, before briefing.";
     } else if (err.code === "path_complete") {
       text +=
-        "\nEvery section already has a lesson - the guided path is complete, " +
+        "\nEvery section already has a lesson - the lesson path is complete, " +
         "so there is nothing left to write.";
     } else if (err.code === "section_has_no_sentences") {
       text +=
@@ -748,7 +748,8 @@ export function registerTools(
               "(a multi-lesson series), 'cards' (card.v1 flashcards), " +
               "'annotations' (creator notes), 'add-language' (translations / " +
               "leveled same-language decks), 'discuss' (guided episode " +
-              "discussion), 'guided' (writing parts of a guided study path), " +
+              "discussion), 'guided' (writing parts of a lesson path; the " +
+              "topic value is unchanged), " +
               "'skill-author' (turn a finished lesson into a reusable skill) " +
               "or 'overview' (the what-can-I-do tour).",
           ),

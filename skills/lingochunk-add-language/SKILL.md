@@ -326,9 +326,9 @@ natively alongside the deck.
 - **No audio handling.** The sibling reuses the primary's audio and timings
   untouched; you only supply text.
 
-## Lesson and guided editions (translate lessons, not just decks)
+## Lesson and lesson-path editions (translate lessons, not just decks)
 
-A sibling submission starts with NO lessons and no guided path. The edition
+A sibling submission starts with NO lessons and no lesson path. The edition
 tools derive them from the master's, on your tokens, with the target-language
 content and every anchor byte-identical by construction: you only ever
 receive the meta-language strings ("units") and can only send text per unit
