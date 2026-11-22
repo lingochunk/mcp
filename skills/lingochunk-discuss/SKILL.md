@@ -32,17 +32,20 @@ the LingoChunk MCP server (see the plugin README) and stop.
    - Show the target-language sentence and its translation. When the slice
      has a `credit` (a creator's video or a licensed source), cite it with
      the line: `credit.text`, linked to that sentence's `source_url`, else
-     `credit.video_url`, else `credit.creator_url`.
+     `credit.video_url`, else `credit.creator_url`; with none of them,
+     `credit.text` alone. A hit from `search_examples` links its own
+     `credit.moment.url` first instead.
    - Explain the grammar and any idioms in plain language.
    - When a word matters, call `lookup_word` for its meaning, gender and CEFR,
      and mention whether the user is already learning it (from `get_vocabulary`)
      rather than guessing. Prioritise `learning`/`new` words; do not dwell on
      words `get_vocabulary(status=known)` shows they have mastered.
-   - Offer to play a bit: `get_audio_url` streams the passage (not on a
-     YouTube episode, whose `credit.playback` is `youtube_embed_only`: it plays
-     only in YouTube's own player, in the app). On a local/plugin setup only, `get_audio_clip` can save a
-     short snippet to disk - skip it if the tool is not offered (remote
-     clients do not have it).
+   - Offer to play a bit: `get_audio_url` streams the passage, but not on a
+     YouTube episode (its sentences carry `source_url`, or its
+     `credit.playback` is `youtube_embed_only`): it plays only in YouTube's
+     own player, in the app, and the API refuses it. On a local/plugin setup
+     only, `get_audio_clip` can save a short snippet to disk - skip it if the
+     tool is not offered (remote clients do not have it).
 
 4. **Follow the learner.** Answer their questions, look up more words on demand,
    pull related examples with `search_examples(lemma=...)` when they ask "where

@@ -77,7 +77,10 @@ carries `credit` in `list_library`, `get_transcript` (and each sentence's
 hit's moment) and `list_decks`; it is null on your own material. The tools pass
 it through whole, and their descriptions tell the assistant to cite it when
 quoting a line: `credit.text` (e.g. "From Example Channel · 2:14"), linked to
-`credit.moment.url`, else `credit.video_url`, else `credit.creator_url`.
+the line's moment (a transcript sentence's `source_url`, a search hit's
+`credit.moment.url`), else `credit.video_url`, else `credit.creator_url`. A
+YouTube episode has no audio here (`get_audio_url` is refused): it plays only
+in YouTube's own player.
 
 **Renamed in 0.14.0.** The guided page is retired and the Lessons tab is the
 one learner path, so the path tools carry lesson-path names. The old names are
