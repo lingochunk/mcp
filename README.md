@@ -71,6 +71,14 @@ compose good lessons, cards and annotations.
 | `get_lesson_writer_brief` | `guided:write` | Returns the runtime brief for the next unwritten section: the sentences, the target vocabulary, the audio windows and the pedagogy this part must follow (optionally for a named teaching `pack`). The brief - not this repo - is where the craft rules live. |
 | `submit_lesson_section` | `guided:write` | Submits the written part back against its brief (pass the same `pack` you briefed with); the server validates it and renders it in the app exactly like an internally generated one. |
 
+**The creator credit.** Content from a creator's video or a licensed source
+carries `credit` in `list_library`, `get_transcript` (and each sentence's
+`source_url`, its moment in the original video), `search_examples` (with the
+hit's moment) and `list_decks`; it is null on your own material. The tools pass
+it through whole, and their descriptions tell the assistant to cite it when
+quoting a line: `credit.text` (e.g. "From Example Channel · 2:14"), linked to
+`credit.moment.url`, else `credit.video_url`, else `credit.creator_url`.
+
 **Renamed in 0.14.0.** The guided page is retired and the Lessons tab is the
 one learner path, so the path tools carry lesson-path names. The old names are
 still registered as deprecated aliases of the same endpoints and will be

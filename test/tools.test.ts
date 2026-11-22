@@ -7,7 +7,8 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { LingoChunkClient } from "../src/client.js";
 import type { Config } from "../src/config.js";
-import { registerTools } from "../src/tools.js";
+import { CREDIT_CITATION, registerTools } from "../src/tools.js";
+import { GUIDES } from "../src/generated/guides.js";
 
 type Handler = (args: Record<string, unknown>) => Promise<CallToolResult>;
 
@@ -2327,5 +2328,100 @@ describe("lesson writer tools", () => {
     expect(text).toContain("This section already has a lesson.");
     expect(text).toContain("get_lesson_writer_brief");
     expect(text).not.toContain("[object Object]");
+  });
+});
+
+// The creator credit (API v1's CreditV1) reaches the assistant whole, and
+// every tool whose answer can carry it says how to cite it when quoting a
+// line.
+describe("the creator credit", () => {
+  const credit = {
+    name: "Example Channel",
+    creator_url: "https://www.youtube.com/@example",
+    platform: "youtube",
+    video_url: "https://www.youtube.com/watch?v=abc123DEF45",
+    statement: "Used with the creator's permission",
+    license: null,
+    text: "From Example Channel",
+    moment: null,
+    playback: "youtube_embed_only",
+  };
+  const hitCredit = {
+    ...credit,
+    text: "From Example Channel \u00b7 2:14",
+    moment: {
+      start_seconds: 134.6,
+      label: "2:14",
+      url: "https://www.youtube.com/watch?v=abc123DEF45&t=134s",
+    },
+  };
+
+  it("list_library passes each item's credit through untouched", async () => {
+    const body = {
+      items: [
+        { submission_id: "s1", title: "A video", credit },
+        { submission_id: "s2", title: "My own upload", credit: null },
+      ],
+      next_cursor: null,
+    };
+    mockFetch(jsonResponse(body));
+    const result = await call("list_library", {});
+    expect(JSON.parse(textOf(result))).toEqual(body);
+  });
+
+  it("get_transcript passes the slice's credit and each sentence's source_url through", async () => {
+    const body = {
+      transcript_state: "ready",
+      sentences: [
+        {
+          position: 12,
+          text: "Guten Morgen!",
+          start: 134.6,
+          source_url: "https://www.youtube.com/watch?v=abc123DEF45&t=134s",
+        },
+      ],
+      credit,
+    };
+    mockFetch(jsonResponse(body));
+    const result = await call("get_transcript", { submission_id: "s1" });
+    const parsed = JSON.parse(textOf(result));
+    expect(parsed).toEqual(body);
+    expect(parsed.sentences[0].source_url).toBe(body.sentences[0]!.source_url);
+  });
+
+  it("search_examples passes each hit's credit, with its moment, through", async () => {
+    const body = { hits: [{ sentence_id: 7, text: "Guten Morgen!", credit: hitCredit }] };
+    mockFetch(jsonResponse(body));
+    const result = await call("search_examples", { q: "Morgen" });
+    expect(JSON.parse(textOf(result))).toEqual(body);
+    expect(textOf(result)).toContain("From Example Channel \u00b7 2:14");
+  });
+
+  it("list_decks passes each deck's credit through", async () => {
+    const body = { decks: [{ id: 1, name: "A video", credit }] };
+    mockFetch(jsonResponse(body));
+    const result = await call("list_decks", {});
+    expect(JSON.parse(textOf(result))).toEqual(body);
+  });
+
+  it("the four tools say how to cite it: credit.text, then the moment, video or creator link", () => {
+    expect(CREDIT_CITATION).toContain("credit.text");
+    expect(CREDIT_CITATION).toContain(
+      "link credit.moment.url, else credit.video_url, else credit.creator_url",
+    );
+    expect(CREDIT_CITATION).toContain("print credit.text alone");
+    for (const name of ["list_library", "get_transcript", "search_examples", "list_decks"]) {
+      const description = tools.get(name)!.description;
+      expect(description, name).toContain(CREDIT_CITATION);
+      expect(description, name).toContain("`credit`");
+    }
+    expect(tools.get("get_transcript")!.description).toContain("source_url");
+  });
+
+  it("the discuss guide cites the creator with every quoted line, and plays no YouTube audio", () => {
+    const body = GUIDES.discuss.body;
+    expect(body).toContain("**Credit the creator.**");
+    expect(body).toContain("`credit.text`, linked to that sentence's `source_url`");
+    expect(body).toContain("`youtube_embed_only`");
   });
 });

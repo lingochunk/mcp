@@ -26,6 +26,19 @@ const CARD_V1_KINDS = new Set([
 ]);
 const CARD_V1_BLUR_KINDS = new Set(["grammar", "cloze", "contrast", "production"]);
 
+/** How to cite a creator when quoting their line. The public API carries
+ *  `credit` (CreditV1) on library items, transcript slices (and `source_url`
+ *  on each sentence), sentence search hits and deck summaries: null on the
+ *  user's own material, set on a creator's video or a licensed source. These tools pass the API's answer
+ *  through whole, so the credit reaches the assistant; this sentence, on
+ *  each of them, says what to do with it. */
+export const CREDIT_CITATION =
+  " Content from a creator's video or a licensed source carries `credit` " +
+  "(null on the user's own material). When you quote a line from it, name " +
+  'the source with credit.text (e.g. "From Example Channel \u00b7 2:14") and ' +
+  "link credit.moment.url, else credit.video_url, else credit.creator_url; " +
+  "with none of them, print credit.text alone. Never drop or reword it.";
+
 /** Format a successful JSON result as a single text block. */
 function jsonResult(value: unknown): CallToolResult {
   return { content: [{ type: "text", text: JSON.stringify(value, null, 2) }] };
@@ -612,7 +625,9 @@ export function registerTools(
         "List the user's ready-to-study episodes (their own submissions plus " +
         "collections they follow), newest first. Cursor-paginated. Use the " +
         "returned submission ids with get_transcript / get_audio_url" +
-        (local ? " / get_audio_clip." : "."),
+        (local ? " / get_audio_clip." : ".") +
+        " Each item carries its episode's `credit` (no moment)." +
+        CREDIT_CITATION,
       inputSchema: {
         limit: z.number().int().min(1).max(200).optional(),
         cursor: z
@@ -636,7 +651,11 @@ export function registerTools(
         "a stable 'sentence_id' and its 'display' string, which the annotation " +
         "tools use to anchor creator notes (offsets are Unicode code points into " +
         "'display'). transcript_state tells you if it is ready, still " +
-        "processing, or unavailable.",
+        "processing, or unavailable. The slice carries the episode's `credit` " +
+        "(no moment), and each sentence its `source_url`, that line's moment " +
+        "in the original YouTube video (null for media LingoChunk hosts): when " +
+        "you quote a sentence, link its source_url with credit.text." +
+        CREDIT_CITATION,
       inputSchema: {
         submission_id: z.string().min(1).describe("The submission id."),
         from_sentence: z.number().int().min(1).optional(),
@@ -677,7 +696,9 @@ export function registerTools(
         "curated example sentences for that word; 'q' does a case-insensitive " +
         "substring match on sentence text. At least one is required, and 'lemma' " +
         "takes precedence when both are given. Results are a capped sample, not " +
-        "exhaustive.",
+        "exhaustive. Each hit carries its source's `credit` with that hit's " +
+        "moment." +
+        CREDIT_CITATION,
       inputSchema: {
         lemma: z
           .string()
@@ -833,8 +854,10 @@ export function registerTools(
       description:
         "List the user's study decks so you can pick a deck_id before adding " +
         "cards (add_card) or exporting (export_anki_deck). Each deck reports its " +
-        "language and card counts (total / new / due). Requires the cards:write " +
-        "or decks:export scope.",
+        "language and card counts (total / new / due), and the `credit` of the " +
+        "episode it was made from (no moment). Requires the cards:write or " +
+        "decks:export scope." +
+        CREDIT_CITATION,
       inputSchema: {},
     },
     async () => runJson(() => client.listDecks()),

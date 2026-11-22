@@ -29,14 +29,18 @@ the LingoChunk MCP server (see the plugin README) and stop.
    or from_time/to_time)`. Check `transcript_state`: only `ready` has content.
 
 3. **Work through it.** Go sentence by sentence (or in small groups):
-   - Show the target-language sentence and its translation.
+   - Show the target-language sentence and its translation. When the slice
+     has a `credit` (a creator's video or a licensed source), cite it with
+     the line: `credit.text`, linked to that sentence's `source_url`, else
+     `credit.video_url`, else `credit.creator_url`.
    - Explain the grammar and any idioms in plain language.
    - When a word matters, call `lookup_word` for its meaning, gender and CEFR,
      and mention whether the user is already learning it (from `get_vocabulary`)
      rather than guessing. Prioritise `learning`/`new` words; do not dwell on
      words `get_vocabulary(status=known)` shows they have mastered.
-   - Offer to play a bit: `get_audio_url` streams the passage (always
-     available). On a local/plugin setup only, `get_audio_clip` can save a
+   - Offer to play a bit: `get_audio_url` streams the passage (not on a
+     YouTube episode, whose `credit.playback` is `youtube_embed_only`: it plays
+     only in YouTube's own player, in the app). On a local/plugin setup only, `get_audio_clip` can save a
      short snippet to disk - skip it if the tool is not offered (remote
      clients do not have it).
 
@@ -53,6 +57,8 @@ the LingoChunk MCP server (see the plugin README) and stop.
   tool to record progress, and grades are not written to the user's FSRS state.
 - **Respect the scope.** Only discuss content the tools return (the user's own
   submissions and followed collections).
+- **Credit the creator.** A line quoted from an episode with a `credit` always
+  carries it (`credit.text` and its link, as above); never drop or reword it.
 
 For a durable artefact (a worksheet or quiz file) instead of a conversation, use
 the `lingochunk-lesson` skill.
